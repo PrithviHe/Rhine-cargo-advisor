@@ -1,7 +1,10 @@
-.PHONY: setup train predict lab mlflow test format
+.PHONY: setup data train predict lab mlflow test format
 
 setup:
 	uv sync --all-groups
+
+data:
+	uv run python -m modeling.data_pipeline
 
 train:
 	uv run python -m modeling.train
