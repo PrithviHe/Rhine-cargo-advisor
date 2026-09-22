@@ -12,7 +12,8 @@ dependencies = [
     "statsmodels",
     "mlflow",
     "parsenvy",
-    "requests>=2.34.2",
+    "xgboost>=3.2.0",
+    "lightgbm>=4.7.0",
 ]
 
 [dependency-groups]
