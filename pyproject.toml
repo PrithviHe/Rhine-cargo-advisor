@@ -12,7 +12,6 @@ dependencies = [
     "statsmodels",
     "mlflow",
     "parsenvy",
-    "requests>=2.34.2",
 ]
 
 [dependency-groups]
