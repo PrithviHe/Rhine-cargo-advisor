@@ -19,8 +19,17 @@ from modeling.cargo import (Assumptions, payload_t, safe_draft_m,
 from modeling.train_forecast import build_features
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data" / "processed" / "kaub_hydro_weather_daily.csv"
+HIST_DATA = ROOT / "data" / "processed" / "kaub_hydro_weather_daily.csv"
+LIVE_DATA = ROOT / "data" / "processed" / "kaub_live_daily.csv"
 MODELS = ROOT / "models"
+
+
+def active_data() -> Path:
+    """Live cache if modeling.fetch_live has run, otherwise the stored history."""
+    return LIVE_DATA if LIVE_DATA.exists() else HIST_DATA
+
+
+DATA = active_data()   # kept for backwards compatibility
 
 KAUB_LAT, KAUB_LON = 50.085, 7.765
 
@@ -34,8 +43,8 @@ def load_models() -> tuple[dict, dict, dict]:
     return meta, mods, resid
 
 
-def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    df = (pd.read_csv(DATA, parse_dates=["date"])
+def load_data(path: Path | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    df = (pd.read_csv(path or active_data(), parse_dates=["date"])
             .sort_values("date").reset_index(drop=True))
     return df, build_features(df)
 
@@ -51,7 +60,8 @@ def make_forecast(df, X, meta, mods, resid, i: int, threshold: float) -> pd.Data
     out = []
     for h in meta["horizons"]:
         qh = meta[f"qhat_h{h}"]
-        lo = max(0.0, today + mods[h][0.1].predict(row)[0] - qh)
+        # Nicht auf 0 begrenzen: der Pegel kann unter den Pegelnullpunkt fallen.
+        lo = today + mods[h][0.1].predict(row)[0] - qh
         mid = today + mods[h][0.5].predict(row)[0]
         hi = today + mods[h][0.9].predict(row)[0] + qh
         out.append({
@@ -121,6 +131,8 @@ class CargoView:
     reduction_pct: float
     draft_m: float
     normal_draft_m: float
+    fairway_m: float          # verfuegbare Fahrrinnentiefe, NICHT der Pegelwert
+    normal_fairway_m: float
     trucks: int
     trains: int
     extra_vessels: int
@@ -147,9 +159,13 @@ def cargo_view(F: pd.DataFrame, A: Assumptions, normal_level_cm: float) -> Cargo
         reduction_pct=100 * red_t / normal_t if normal_t else 0.0,
         draft_m=min(safe_draft_m(lo7, A), A.max_draft_m),
         normal_draft_m=min(safe_draft_m(normal_level_cm, A), A.max_draft_m),
+        fairway_m=available_depth_m(lo7, A),
+        normal_fairway_m=available_depth_m(normal_level_cm, A),
         trucks=int(-(-red_t // A.truck_payload_t)),
         trains=int(-(-red_t // A.train_payload_t)),
-        extra_vessels=int(-(-red_t // fc_t)) if fc_t > 0 else 0,
+        # Ab etwa sechs Zusatzfahrten ist der Wasserweg praktisch keine Option mehr.
+        # Eine zweistellige Zahl waere rechnerisch richtig, aber operativ sinnlos.
+        extra_vessels=(min(int(-(-red_t // fc_t)), 99) if fc_t > 0 else 0),
         stranded_7d_t=stranded,
     )
 
@@ -215,13 +231,18 @@ def executive_summary(F: pd.DataFrame, risk: Risk, cv: CargoView,
     if risk.level in ("HIGH", "MODERATE"):
         when = (f"in {risk.first_breach_h} day(s)" if risk.first_breach_h
                 else "within the horizon")
-        return (f"Water levels are expected to fall below the critical level of "
-                f"{threshold:.0f} cm {when}, reaching {last['mid']:.0f} cm by day +7 "
-                f"(80 % range {last['lo']:.0f}\u2013{last['hi']:.0f} cm). Vessel loading "
-                f"should be reduced to {cv.forecast_t:,.0f} t, a cut of "
-                f"{cv.reduction_t:,.0f} t ({cv.reduction_pct:.0f} %) against a full load. "
-                f"Roughly {cv.trucks} trucks or {cv.trains} train(s) of alternative "
-                f"capacity will be required to move the same volume.")
+        vessels = ("" if cv.extra_vessels <= 6 else
+                   " At this level the waterway is effectively unusable for bulk "
+                   "volumes and the shortfall has to move by road or rail.")
+        return (f"The gauge is expected to fall below the critical level of "
+                f"{threshold:.0f} cm {when}, reading {last['mid']:.0f} cm by day +7 "
+                f"(80 % range {last['lo']:.0f} to {last['hi']:.0f} cm). That leaves about "
+                f"{cv.fairway_m:.2f} m of fairway depth and a safe draft of "
+                f"{cv.draft_m:.2f} m. Vessel loading should be reduced to "
+                f"{cv.forecast_t:,.0f} t, a cut of {cv.reduction_t:,.0f} t "
+                f"({cv.reduction_pct:.0f} %) against a full load. Roughly {cv.trucks} "
+                f"trucks or {cv.trains} train(s) of alternative capacity will be needed "
+                f"to move the same volume.{vessels}")
     if risk.level == "WATCH":
         return (f"The median forecast stays above the critical level of "
                 f"{threshold:.0f} cm, but the 80 % range reaches below it on "
@@ -237,3 +258,67 @@ def executive_summary(F: pd.DataFrame, risk: Risk, cv: CargoView,
 def sparkline_values(df: pd.DataFrame, level_col: str, i: int, n: int = 7) -> list[float]:
     """Last n observed levels, for the mini trend line on the KPI card."""
     return df.loc[max(0, i - n + 1):i, level_col].astype(float).tolist()
+
+
+# ---------------------------------------------------------------- validation
+def backtest(df: pd.DataFrame, X: pd.DataFrame, meta: dict, mods: dict,
+             resid: dict, threshold: float, start: str, end: str,
+             step: int = 1) -> pd.DataFrame:
+    """
+    Re-issue the forecast on every origin date in the window and compare it
+    with what actually happened. This is the only way to check the forecast
+    half of the product against ground truth.
+    """
+    level_col = meta["level_col"]
+    s = df[level_col].astype(float)
+    ok = X.notna().all(axis=1)
+    mask = ok & (df["date"] >= start) & (df["date"] <= end)
+    origins = df.index[mask][::step]
+
+    rows = []
+    for i in origins:
+        if i + max(meta["horizons"]) >= len(df):
+            continue
+        today = float(s.iloc[i])
+        row = X.loc[[i]]
+        for h in meta["horizons"]:
+            qh = meta[f"qhat_h{h}"]
+            lo = today + mods[h][0.1].predict(row)[0] - qh
+            mid = today + mods[h][0.5].predict(row)[0]
+            hi = today + mods[h][0.9].predict(row)[0] + qh
+            act = float(s.iloc[i + h])
+            rows.append({
+                "origin": df.loc[i, "date"], "h": h,
+                "target_date": df.loc[i + h, "date"],
+                "today": today, "lo": lo, "mid": mid, "hi": hi, "actual": act,
+                "error": mid - act, "abs_error": abs(mid - act),
+                "baseline_abs": abs(today - act),
+                "inside": bool(lo <= act <= hi),
+                "warned": bool(mid < threshold),
+                "actually_low": bool(act < threshold),
+            })
+    return pd.DataFrame(rows)
+
+
+def backtest_summary(bt: pd.DataFrame) -> pd.DataFrame:
+    """MAE, skill and interval coverage per horizon."""
+    g = bt.groupby("h")
+    out = pd.DataFrame({
+        "MAE (cm)": g["abs_error"].mean(),
+        "Baseline MAE (cm)": g["baseline_abs"].mean(),
+        "Coverage": g["inside"].mean(),
+        "Forecasts": g.size(),
+    })
+    out["Skill vs baseline"] = 1 - out["MAE (cm)"] / out["Baseline MAE (cm)"]
+    return out.reset_index().rename(columns={"h": "Horizon"})
+
+
+def warning_quality(bt: pd.DataFrame) -> dict:
+    """Did the warning fire when it mattered? Confusion counts, not accuracy."""
+    tp = int((bt.warned & bt.actually_low).sum())
+    fp = int((bt.warned & ~bt.actually_low).sum())
+    fn = int((~bt.warned & bt.actually_low).sum())
+    tn = int((~bt.warned & ~bt.actually_low).sum())
+    return {"hits": tp, "false_alarms": fp, "missed": fn, "correct_all_clear": tn,
+            "recall": tp / (tp + fn) if tp + fn else float("nan"),
+            "precision": tp / (tp + fp) if tp + fp else float("nan")}

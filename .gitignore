@@ -137,3 +137,5 @@ models/*
 #config file has sensitive data
 .mlflow_uri
 mlflow.db
+data/processed/kaub_live_daily.csv
+data/processed/live_status.json

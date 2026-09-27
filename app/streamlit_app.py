@@ -171,7 +171,8 @@ st.sidebar.caption("Rhine Cargo Capacity Advisor")
 
 NAV = [("Overview", "\U0001F3E0"), ("Forecast", "\U0001F4C8"),
        ("Cargo Planning", "\U0001F6A2"), ("Transport Options", "\U0001F69B"),
-       ("Reports", "\U0001F4CA"), ("Settings", "\u2699\uFE0F")]
+       ("Validation", "\U0001F50D"), ("Reports", "\U0001F4CA"),
+       ("Settings", "\u2699\uFE0F")]
 if "page" not in st.session_state:
     st.session_state.page = "Overview"
 
@@ -221,7 +222,7 @@ hit = DF.index[DF["date"].dt.date == sel]
 if len(hit) and hit[0] in VALID:
     st.session_state.ref_i = int(hit[0])
 
-THRESHOLD = st.session_state.get("threshold", 78.0)
+THRESHOLD = st.session_state.get("threshold", 77.0)   # GlW Kaub, ab 01.01.2023
 A = st.session_state.get("assumptions", Assumptions(glw_cm=THRESHOLD))
 st.sidebar.divider()
 st.sidebar.caption("Smarter forecasts.\nSmoother supply chains.")
@@ -292,7 +293,7 @@ def forecast_chart(height=330, days=8):
     lo_all = min(hist.level.min(), F.lo.min(), THRESHOLD)
     hi_all = max(hist.level.max(), F.hi.max(), THRESHOLD)
     pad = 0.10 * max(1.0, hi_all - lo_all)
-    ys = alt.Scale(domain=[max(0.0, lo_all - pad), hi_all + pad], nice=False)
+    ys = alt.Scale(domain=[lo_all - pad, hi_all + pad], nice=False)
     xa = alt.Axis(format="%d %b", labelAngle=-40, tickCount="day", grid=False,
                   labelColor=MUTED, titleColor=MUTED, domainColor=BORDER,
                   tickColor=BORDER)
@@ -375,37 +376,44 @@ if PAGE == "Overview":
     # ---------- KPI row: chain order, decision-critical cards emphasised ----------
     c = st.columns([1, 1, 1.12, 1.12, 1.12], gap="small")
     spark = core.sparkline_values(DF, LEVEL, i, 10)
-    dev = 100 * (TODAY - NORMAL_LVL) / NORMAL_LVL if NORMAL_LVL else 0
+    # Der Pegel hat einen willkuerlichen Nullpunkt - eine Prozentangabe waere
+    # irrefuehrend. Deshalb die Differenz in Zentimetern.
+    dev_cm = TODAY - NORMAL_LVL
     trend_word = ("falling" if spark[-1] < spark[0] - 1 else
                   "rising" if spark[-1] > spark[0] + 1 else "stable")
     trend_ico = "&#8600;" if trend_word == "falling" else (
         "&#8599;" if trend_word == "rising" else "&#8594;")
 
     kpi(c[0], "&#127754;", "Current water level", f"{TODAY:.0f} cm",
-        f"vs. {NORMAL_LVL:.0f} cm seasonal normal &nbsp;"
-        f"<b style='color:{CRIT if dev < 0 else OK}'>{dev:+.0f} %</b><br>"
-        f"{trend_ico} {trend_word} over 10 days",
+        f"<b style='color:{CRIT if dev_cm < 0 else OK}'>{dev_cm:+.0f} cm</b> "
+        f"vs. {NORMAL_LVL:.0f} cm seasonal normal<br>"
+        f"{trend_ico} {trend_word} over 10 days<br>"
+        f"<span style='opacity:.8;'>reading against gauge datum, not water depth</span>",
         spark=sparkline(spark, colour=CRIT if trend_word == "falling" else WATER))
 
+    # Wert und Spanne beziehen sich beide auf Tag +7. Der Zeitpunkt der
+    # Unterschreitung steht als Zusatzzeile darunter, nicht als Hauptwert.
+    d7 = F.iloc[-1]
     if RISK.first_breach_h:
-        f_val = f"{F.loc[F.h == RISK.first_breach_h, 'mid'].iloc[0]:.0f} cm"
-        f_sub = f"Critical level reached in {RISK.first_breach_h} day(s)"
+        f_sub = (f"Critical level reached on day +{RISK.first_breach_h} "
+                 f"({F.loc[F.h == RISK.first_breach_h, 'date'].iloc[0]:%d %b})")
         f_col = f_acc = CRIT
     elif RISK.watch_days:
-        f_val, f_sub = f"{F.iloc[-1]['mid']:.0f} cm", "Critical level inside the range"
-        f_col = f_acc = WARN
+        f_sub, f_col = "Critical level inside the range", WARN
+        f_acc = WARN
     else:
-        f_val, f_sub = f"{F.iloc[-1]['mid']:.0f} cm", "Stays above the critical level"
-        f_col = f_acc = OK
-    kpi(c[1], "&#128197;", "7-day forecast", f_val,
-        f"{f_sub}<br>range {F.iloc[-1]['lo']:.0f}&ndash;{F.iloc[-1]['hi']:.0f} cm",
+        f_sub, f_col = "Stays above the critical level", OK
+        f_acc = OK
+    kpi(c[1], "&#128197;", "Forecast day +7", f"{d7['mid']:.0f} cm",
+        f"80 % range {d7['lo']:.0f} to {d7['hi']:.0f} cm<br>{f_sub}",
         f_col, f_acc,
         spark=sparkline(F["mid"].tolist(), colour=f_col))
 
     d_pct = 100 * CV.draft_m / CV.normal_draft_m if CV.normal_draft_m else 100
     kpi(c[2], "&#128674;", "Recommended draft", f"{CV.draft_m:.2f} m",
-        f"vs. {CV.normal_draft_m:.2f} m normal<br>"
-        f"<b style='color:{CRIT if d_pct < 95 else OK}'>{d_pct:.0f} % of normal</b>",
+        f"from {CV.fairway_m:.2f} m fairway depth<br>"
+        f"<b style='color:{CRIT if d_pct < 95 else OK}'>{d_pct:.0f} % of normal</b> "
+        f"({CV.normal_draft_m:.2f} m)",
         accent=CRIT if d_pct < 95 else OK, primary=True)
 
     kpi(c[3], "&#128230;", "Recommended cargo", f"{CV.forecast_t:,.0f} t",
@@ -417,8 +425,11 @@ if PAGE == "Overview":
 
     light = {"HIGH": "&#128308;", "MODERATE": "&#128992;",
              "WATCH": "&#128993;", "NORMAL": "&#128994;"}[RISK.level]
+    trend_txt = {"increasing": "risk rising over the horizon",
+                 "easing": "risk easing towards day +7",
+                 "stable": "risk steady across the horizon"}[RISK.trend]
     kpi(c[4], light, "Risk status", RISK.level.title(),
-        f"{RISK.short}<br>trend: {RISK.trend}", SC, SC, primary=True)
+        f"{RISK.short}<br>{trend_txt}", SC, SC, primary=True)
 
     # ---------- recommended actions, directly under the KPIs ----------
     acts = "".join(f"<li>{a}</li>" for a in core.recommendations(RISK, CV, A))
@@ -458,11 +469,18 @@ if PAGE == "Overview":
             st.markdown('<div class="ptitle">&#128666; Logistics impact</div>',
                         unsafe_allow_html=True)
             m = st.columns(2)
-            m[0].metric("Stranded over 7 days", f"{CV.stranded_7d_t:,.0f} t")
-            m[0].caption("sum of daily shortfall")
+            m[0].metric("Shortfall per daily sailing",
+                        f"{CV.stranded_7d_t / len(F):,.0f} t")
+            m[0].caption(f"average over the 7 forecast days &middot; "
+                         f"{CV.stranded_7d_t:,.0f} t in total if one vessel "
+                         "sails every day")
             m[1].metric("Replacement capacity", f"{CV.trucks} trucks")
-            m[1].caption(f"or {CV.trains} train(s) &middot; "
-                         f"+{CV.extra_vessels} vessel trips")
+            vessel_note = (f"or {CV.trains} train(s) &middot; "
+                           f"+{CV.extra_vessels} vessel trips"
+                           if CV.extra_vessels <= 6 else
+                           f"or {CV.trains} train(s) &middot; waterway no longer "
+                           "a practical option at this level")
+            m[1].caption(vessel_note)
 
     st.write("")
     with st.container(border=True):
@@ -478,9 +496,12 @@ if PAGE == "Overview":
                     "What the forecast means</div>" + ins, unsafe_allow_html=True)
 
         # -- die Kette Wasserstand -> Tiefgang -> Ladung, als Kette lesbar --
-        chain = [("Water level", f"{F.iloc[-1]['lo']:.0f} cm", "day +7, lower bound"),
+        chain = [("Gauge level", f"{F.iloc[-1]['lo']:.0f} cm",
+                  "day +7, lower bound &middot; relative to gauge datum"),
+                 ("Fairway depth", f"{CV.fairway_m:.2f} m",
+                  f"derived from the {THRESHOLD:.0f} cm reference level"),
                  ("Safe draft", f"{CV.draft_m:.2f} m",
-                  f"{100 * CV.draft_m / CV.normal_draft_m:.0f} % of normal"),
+                  f"minus {A.under_keel_clearance_m:.2f} m under-keel clearance"),
                  ("Payload", f"{CV.forecast_t:,.0f} t",
                   f"&minus;{CV.reduction_pct:.0f} % vs. full load"),
                  ("Replacement", f"{CV.trucks} trucks",
@@ -619,8 +640,15 @@ elif PAGE == "Transport Options":
                     f"at {A.truck_payload_t:,.0f} t each", delta_color="off")
         t[1].metric("Rail", f"{CV.trains} train(s)",
                     f"at {A.train_payload_t:,.0f} t each", delta_color="off")
-        t[2].metric("Additional vessel trips", f"+{CV.extra_vessels}",
-                    f"at {CV.forecast_t:,.0f} t each", delta_color="off")
+        if CV.extra_vessels <= 6:
+            t[2].metric("Additional vessel trips", f"+{CV.extra_vessels}",
+                        f"at {CV.forecast_t:,.0f} t each", delta_color="off")
+        else:
+            t[2].metric("Additional vessel trips", "not viable",
+                        f"{CV.extra_vessels} trips at {CV.forecast_t:,.0f} t each",
+                        delta_color="off")
+            t[2].caption("At this loading limit the waterway cannot absorb the "
+                         "shortfall; it has to move by road or rail.")
 
         st.markdown("#### Requirement by forecast day")
         from modeling.cargo import shortfall_range
@@ -638,6 +666,145 @@ elif PAGE == "Transport Options":
     st.warning("Cost and surcharge modelling is not implemented. Low-water surcharge "
                "brackets are not available in the project data, so no cost figures "
                "are shown rather than estimated ones.")
+
+
+# ================================================================= Validation
+elif PAGE == "Validation":
+    header()
+    st.write("")
+    st.markdown("#### Retrospective validation")
+    st.caption("The forecast is re-issued on every origin date in the window and "
+               "compared with what actually happened. This is the only part of the "
+               "product that can be checked against ground truth.")
+
+    c = st.columns([1, 1, 1])
+    v_start = c[0].date_input("From", value=pd.Timestamp("2023-09-01").date(),
+                              min_value=DF.date.min().date(),
+                              max_value=DF.date.max().date(), key="v_start")
+    v_end = c[1].date_input("To", value=min(pd.Timestamp("2026-08-25"),
+                                            DF.date.max()).date(),
+                            min_value=DF.date.min().date(),
+                            max_value=DF.date.max().date(), key="v_end")
+    step = c[2].selectbox("Origin dates", [1, 3, 7], index=1,
+                          format_func=lambda k: f"every {k} day(s)")
+
+    if st.button("Run validation", type="primary"):
+        st.session_state.bt_args = (str(v_start), str(v_end), int(step))
+
+    if "bt_args" in st.session_state:
+        a0, a1, a2 = st.session_state.bt_args
+        with st.spinner("Re-issuing forecasts…"):
+            BT = core.backtest(DF, XALL, META, MODS, RESID, THRESHOLD, a0, a1, a2)
+
+        if BT.empty:
+            st.warning("No complete origin dates in this window.")
+        else:
+            summ = core.backtest_summary(BT)
+            k = st.columns(4)
+            k[0].metric("Forecasts evaluated", f"{len(BT):,}")
+            k[1].metric("Origin dates", f"{BT.origin.nunique():,}")
+            k[2].metric("Mean coverage",
+                        f"{100 * BT['inside'].mean():.0f} %",
+                        f"target {100 * META['target_coverage']:.0f} %",
+                        delta_color="off")
+            k[3].metric("Skill at day +7",
+                        f"{100 * summ.loc[summ.Horizon == 7, 'Skill vs baseline'].iloc[0]:.0f} %",
+                        "vs. persistence", delta_color="off")
+
+            st.markdown("##### Accuracy by horizon")
+            show = summ.copy()
+            show["Coverage"] = (100 * show["Coverage"]).round(0).astype(int).astype(str) + " %"
+            show["Skill vs baseline"] = ((100 * show["Skill vs baseline"]).round(0)
+                                         .astype(int).map("{:+d} %".format))
+            show[["MAE (cm)", "Baseline MAE (cm)"]] = show[["MAE (cm)",
+                                                            "Baseline MAE (cm)"]].round(1)
+            st.dataframe(show, use_container_width=True, hide_index=True)
+
+            long = summ.melt(id_vars="Horizon",
+                             value_vars=["MAE (cm)", "Baseline MAE (cm)"],
+                             var_name="series", value_name="mae")
+            ch = alt.Chart(long).mark_line(point=True, strokeWidth=2.4).encode(
+                x=alt.X("Horizon:O", title="Forecast horizon (days)",
+                        axis=alt.Axis(labelColor=MUTED, titleColor=MUTED,
+                                      domainColor=BORDER, tickColor=BORDER)),
+                y=alt.Y("mae:Q", title="MAE (cm)",
+                        axis=alt.Axis(labelColor=MUTED, titleColor=MUTED,
+                                      gridColor=GRID, domainColor=BORDER,
+                                      tickColor=BORDER)),
+                color=alt.Color("series:N", scale=alt.Scale(
+                    domain=["MAE (cm)", "Baseline MAE (cm)"], range=[WATER, MUTED]),
+                    legend=alt.Legend(title=None, orient="top")),
+                tooltip=["Horizon", "series", alt.Tooltip("mae:Q", format=".1f")])
+            st.altair_chart(ch.properties(height=250)
+                            .configure_view(strokeOpacity=0, fill=PANEL)
+                            .configure_legend(labelColor=MUTED)
+                            .configure(background=PANEL), use_container_width=True)
+
+            st.markdown("##### Did the warning fire when it mattered?")
+            st.caption(f"A warning is counted when the median forecast falls below "
+                       f"{THRESHOLD:.0f} cm. Evaluated at day +7, the longest and "
+                       "hardest horizon.")
+            wq = core.warning_quality(BT[BT.h == 7])
+            w = st.columns(5)
+            w[0].metric("Correct warnings", wq["hits"])
+            w[1].metric("False alarms", wq["false_alarms"])
+            w[2].metric("Missed events", wq["missed"])
+            w[3].metric("Recall", f"{100 * wq['recall']:.0f} %")
+            w[3].caption("share of low-water days warned about")
+            w[4].metric("Precision", f"{100 * wq['precision']:.0f} %")
+            w[4].caption("share of warnings that were correct")
+
+            st.markdown("##### Case study")
+            cases = sorted(BT.origin.unique())
+            pick = st.select_slider(
+                "Origin date", options=cases,
+                value=min(cases, key=lambda d: abs(
+                    pd.Timestamp(d) - pd.Timestamp("2026-08-10"))),
+                format_func=lambda d: pd.Timestamp(d).strftime("%d %b %Y"))
+            case = BT[BT.origin == pick].sort_values("h")
+            cc = st.columns([2, 1])
+            band = alt.Chart(case).mark_area(opacity=0.28, color=WATER).encode(
+                x=alt.X("target_date:T", title=None,
+                        axis=alt.Axis(format="%d %b", labelAngle=-40,
+                                      labelColor=MUTED, domainColor=BORDER,
+                                      tickColor=BORDER)),
+                y=alt.Y("lo:Q", title="Gauge level (cm)",
+                        axis=alt.Axis(labelColor=MUTED, titleColor=MUTED,
+                                      gridColor=GRID, domainColor=BORDER,
+                                      tickColor=BORDER)), y2="hi:Q")
+            fline = alt.Chart(case).mark_line(point=True, strokeDash=[6, 3],
+                                              strokeWidth=2.4, color=WATER).encode(
+                x="target_date:T", y="mid:Q")
+            aline = alt.Chart(case).mark_line(point=True, strokeWidth=2.4,
+                                              color=CRIT).encode(
+                x="target_date:T", y="actual:Q",
+                tooltip=[alt.Tooltip("target_date:T", title="Date", format="%d %b"),
+                         alt.Tooltip("actual:Q", title="Actual (cm)", format=".0f"),
+                         alt.Tooltip("mid:Q", title="Forecast (cm)", format=".0f")])
+            rule = alt.Chart(pd.DataFrame({"y": [THRESHOLD]})).mark_rule(
+                color=CRIT, strokeDash=[6, 4], strokeWidth=2).encode(y="y:Q")
+            with cc[0]:
+                st.altair_chart((band + fline + aline + rule).properties(height=260)
+                                .configure_view(strokeOpacity=0, fill=PANEL)
+                                .configure(background=PANEL),
+                                use_container_width=True)
+                st.caption("Blue dashed: median forecast with 80 % band. "
+                           "Red: what actually happened. Dashed red line: critical level.")
+            with cc[1]:
+                st.metric("Inside the 80 % band",
+                          f"{int(case['inside'].sum())} of {len(case)} days")
+                st.metric("MAE over the seven days",
+                          f"{case['abs_error'].mean():.1f} cm")
+                st.metric("Baseline MAE",
+                          f"{case['baseline_abs'].mean():.1f} cm")
+                st.dataframe(pd.DataFrame({
+                    "Day": "+" + case.h.astype(str),
+                    "Forecast": case.mid.round(0).astype(int).astype(str) + " cm",
+                    "Actual": case.actual.round(0).astype(int).astype(str) + " cm",
+                    "In band": case.inside.map({True: "yes", False: "no"}),
+                }), use_container_width=True, hide_index=True, height=230)
+    else:
+        st.info("Choose a window and press **Run validation**.")
 
 
 # ================================================================= Reports
@@ -681,8 +848,10 @@ else:
     header()
     st.write("")
     st.markdown("#### Operating thresholds")
-    thr = st.number_input("Critical gauge level (cm)", value=float(THRESHOLD), step=1.0,
-                          help="Below this level, loading restrictions apply.")
+    thr = st.number_input(
+        "Critical gauge level (cm)", value=float(THRESHOLD), step=1.0,
+        help="Equivalent low-water level (GlW) for Kaub: 77 cm, valid from "
+             "01.01.2023. Source: PEGELONLINE station master data.")
 
     st.markdown("#### Cargo assumptions")
     st.caption("Unverified — pending WSV / ELWIS and vessel loading tables. "
@@ -698,6 +867,35 @@ else:
         st.session_state.assumptions = Assumptions(
             glw_cm=thr, max_payload_t=mp, truck_payload_t=tp, train_payload_t=rp)
         st.rerun()
+
+    st.markdown("#### Live data")
+    from modeling import fetch_live
+    stat = fetch_live.read_status()
+    src = core.active_data()
+    d1, d2 = st.columns([1, 2])
+    with d1:
+        if st.button("Refresh from live sources", type="primary",
+                     use_container_width=True):
+            with st.spinner("Fetching PEGELONLINE and Open-Meteo…"):
+                try:
+                    new_stat = fetch_live.update()
+                    st.cache_data.clear()
+                    st.success(f"Updated to {new_stat['data_end']} "
+                               f"({new_stat['live_days_added']} new day(s)).")
+                    st.rerun()
+                except fetch_live.LiveDataError as e:
+                    st.error(f"Live update failed: {e}")
+    with d2:
+        st.caption(f"Active dataset: `{src.name}` · "
+                   f"{DF.date.min():%d %b %Y} – {DF.date.max():%d %b %Y} "
+                   f"({len(DF):,} days)")
+        if stat:
+            st.caption(f"Last live refresh: {stat['updated_utc']} UTC · "
+                       f"{stat['live_days_added']} day(s) beyond the stored history")
+        else:
+            st.caption("No live refresh yet — running on the stored history. "
+                       "Sources: PEGELONLINE (gauge, discharge) and Open-Meteo "
+                       "(weather). No API key required.")
 
     st.markdown("#### Model and data")
     st.json({"records": META["n_rows"], "data_end": META["data_end"],

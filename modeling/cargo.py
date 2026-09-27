@@ -13,9 +13,13 @@ from dataclasses import dataclass, asdict, field
 
 @dataclass(frozen=True)
 class Assumptions:
-    # --- Gewaesser / Pegel Kaub ---
-    glw_cm: float = 78.0                # Gleichwertiger Wasserstand   [TO VERIFY: WSV]
-    fairway_depth_at_glw_m: float = 1.90  # Fahrrinnentiefe bei GlW     [TO VERIFY: WSV]
+    # --- Gewaesser / Pegel Kaub -------------------------------------------
+    # Quelle: PEGELONLINE Stammdaten, Messstelle KAUB (Nr. 25700100,
+    # UUID 1d26e504-7f9e-480a-b52c-5932be6549ab), WSA Rhein / Standort Bingen,
+    # Rhein-km 546,230. Pegelnullpunkt 67,67 m ue. NHN (DE_DHHN2016_NH_RP),
+    # gueltig ab 01.11.2019. Abgerufen 27.09.2026.
+    glw_cm: float = 77.0                # GlW, gueltig ab 01.01.2023   [VERIFIED]
+    fairway_depth_at_glw_m: float = 1.90  # TuGlW 190 cm               [VERIFIED]
     under_keel_clearance_m: float = 0.30  # Sicherheitsabstand unter Kiel [ANNAHME]
 
     # --- Referenzschiff: Grossmotorgueterschiff 110 m ---
@@ -31,6 +35,19 @@ class Assumptions:
     def as_dict(self) -> dict:
         return asdict(self)
 
+
+# Charakteristische Wasserstaende am Pegel Kaub laut PEGELONLINE-Stammdaten.
+# Nicht Teil der Rechnung, aber nuetzlich zur Einordnung eines Messwerts.
+CHARACTERISTIC_LEVELS_CM = {
+    "HHW": 825,    # hoechster bekannter Wasserstand, 05.01.1883
+    "HSW": 640,    # hoechster Schifffahrtswasserstand, ab 01.01.1950
+    "MHW": 544,    # mittlerer Hochwasserstand, 2010-2020
+    "MW": 208,     # Mittelwasser, 2010-2020
+    "TuGlW": 190,  # Tiefe unter GlW = unterhaltene Fahrrinnentiefe
+    "GlW": 77,     # gleichwertiger Wasserstand, ab 01.01.2023
+    "MNW": 65,     # mittlerer Niedrigwasserstand, 2010-2020
+    "NNW": 25,     # niedrigster bekannter Wasserstand, 22.10.2018
+}
 
 DEFAULTS = Assumptions()
 
