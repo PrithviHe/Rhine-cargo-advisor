@@ -225,6 +225,24 @@ if len(hit) and hit[0] in VALID:
 THRESHOLD = st.session_state.get("threshold", 77.0)   # GlW Kaub, ab 01.01.2023
 A = st.session_state.get("assumptions", Assumptions(glw_cm=THRESHOLD))
 st.sidebar.divider()
+_age = (pd.Timestamp.today().normalize() - DF["date"].max()).days
+st.sidebar.markdown("**Data**")
+st.sidebar.caption(f"Through {DF['date'].max():%d %b %Y} \u00b7 "
+                   + ("up to date" if _age <= 1 else f"{_age} days old"))
+if st.sidebar.button("\U0001F504\u2002Refresh live data", use_container_width=True):
+    from modeling import fetch_live
+    with st.spinner("Fetching PEGELONLINE and Open-Meteo\u2026"):
+        try:
+            _new = fetch_live.update()
+            st.cache_data.clear()
+            st.success(f"Updated through {_new['data_end']}.")
+            st.rerun()
+        except fetch_live.LiveDataError as e:
+            st.sidebar.error(f"Refresh failed: {e}")
+st.sidebar.caption("The newest complete day is always yesterday \u2014 a partial "
+                   "day would distort the daily mean and rainfall total.")
+
+st.sidebar.divider()
 st.sidebar.caption("Smarter forecasts.\nSmoother supply chains.")
 
 
@@ -239,15 +257,33 @@ CV = core.cargo_view(F, A, NORMAL_LVL)
 SC = STATUS_COLOR[RISK.level]
 
 
+def data_age():
+    """Alter des neuesten vollstaendigen Tages im Datensatz, in Tagen."""
+    return (pd.Timestamp.today().normalize() - DF["date"].max()).days
+
+
 def header():
+    age = data_age()
+    if age <= 1:
+        fresh, col = "up to date", OK
+    elif age == 2:
+        fresh, col = f"{age} days old", WARN
+    else:
+        fresh, col = f"{age} days old", CRIT
     st.markdown(f"""
     <div class="hl-head">
       <div><h2>HydroLoad-AI</h2><p>Rhine Cargo Capacity Advisor</p></div>
       <div class="hl-meta">
-        <b>Kaub, Middle Rhine</b><br>{core.KAUB_LAT:.3f}° N, {core.KAUB_LON:.3f}° E<br>
-        Forecast issued {REF:%d %b %Y}
+        <b>Kaub, Middle Rhine</b><br>{core.KAUB_LAT:.3f}&deg; N, {core.KAUB_LON:.3f}&deg; E<br>
+        Data through {DF["date"].max():%d %b %Y}
+        &nbsp;<span style="background:{col};color:#0e1218;border-radius:.25rem;
+              padding:.06rem .38rem;font-size:.71rem;font-weight:700;">{fresh}</span>
       </div>
     </div>""", unsafe_allow_html=True)
+    if age > 2:
+        st.warning(f"The dataset ends on {DF['date'].max():%d %b %Y}, {age} days ago. "
+                   "Open **Settings** and refresh from the live sources before using "
+                   "this forecast operationally.")
 
 
 def sparkline(vals, w=118, h=26, colour=WATER):
