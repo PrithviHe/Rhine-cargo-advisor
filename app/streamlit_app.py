@@ -123,17 +123,22 @@ st.markdown(f"""
             height:12px; margin-bottom:.7rem;}}
   .bar-fill {{height:10px; border-radius:3px;}}
   .loss {{background:{CRIT}1A; border:1px solid {CRIT}55; border-radius:.4rem;
-          padding:.45rem .65rem; margin-top:.15rem; font-size:.85rem; color:{TEXT};
-          display:flex; justify-content:space-between; align-items:center;}}
-  .ins {{font-size:.855rem; margin-bottom:.42rem; line-height:1.4; color:{TEXT};}}
-  .chain-row {{background:{PANEL_2}; border:1px solid {BORDER}; border-radius:.35rem;
-               padding:.32rem .55rem;}}
-  .chain-lab {{font-size:.70rem; color:#aab4c0; text-transform:uppercase;
-               letter-spacing:.045em; font-weight:600;}}
-  .chain-val {{font-size:1.02rem; font-weight:700; color:{NAVY}; line-height:1.15;}}
-  .chain-note {{font-size:.73rem; color:#a7b1bd;}}
-  .chain-arrow {{text-align:center; color:{WATER}; font-size:.85rem;
-                 line-height:1; margin:.12rem 0;}}
+          padding:.5rem .7rem; margin:.1rem 0 .15rem 0; font-size:.85rem;
+          color:{TEXT}; display:flex; justify-content:space-between;
+          align-items:center; box-sizing:border-box;}}
+
+
+  /* ---------- Aussagen als Karten statt als Liste ---------- */
+  .ins-stack {{display:flex; flex-direction:column; gap:.45rem;
+               margin-top:.15rem;}}
+  .ins-card {{background:{PANEL_2}; border:1px solid {BORDER};
+              border-left:3px solid {WATER}; border-radius:.35rem;
+              padding:.62rem .8rem; font-size:.875rem; line-height:1.45;
+              color:{TEXT};}}
+  .subhead {{font-size:.7rem; color:#aab4c0; text-transform:uppercase;
+             letter-spacing:.05em; font-weight:700; margin:0 0 .4rem 0;}}
+  .foot {{margin-top:.95rem; padding-top:.6rem; border-top:1px solid {BORDER};
+          font-size:.775rem; color:#9aa5b1; line-height:1.45;}}
 
   div[data-testid="stMetricValue"] {{font-size:1.45rem; color:{TEXT};}}
   div[data-testid="stMetricLabel"] {{font-size:.76rem; color:#aab4c0;}}
@@ -243,7 +248,15 @@ st.sidebar.caption("The newest complete day is always yesterday \u2014 a partial
                    "day would distort the daily mean and rainfall total.")
 
 st.sidebar.divider()
-st.sidebar.caption("Smarter forecasts.\nSmoother supply chains.")
+st.sidebar.markdown(f"""
+<div style="text-align:center; padding:.7rem .4rem .3rem .4rem;">
+  <div style="font-size:1.45rem; line-height:1; margin-bottom:.5rem;">&#128674;</div>
+  <div style="font-size:.9rem; font-weight:700; color:{WATER}; line-height:1.4;">
+    Smarter forecasts.<br>Smoother supply chains.
+  </div>
+  <div style="height:2px; width:52px; margin:.7rem auto 0 auto;
+       background:linear-gradient(90deg, transparent, {WATER}, transparent);"></div>
+</div>""", unsafe_allow_html=True)
 
 
 # ================================================================= compute
@@ -499,7 +512,8 @@ if PAGE == "Overview":
                 f'<div class="loss"><span><b>Capacity loss</b></span>'
                 f'<span style="color:{CRIT};font-weight:700;">'
                 f'{CV.reduction_t:,.0f} t &nbsp;(&minus;{CV.reduction_pct:.0f} %)</span>'
-                f'</div>', unsafe_allow_html=True)
+                f'</div><div style="height:.15rem;"></div>',
+                unsafe_allow_html=True)
 
         with st.container(border=True):
             st.markdown('<div class="ptitle">&#128666; Logistics impact</div>',
@@ -520,71 +534,50 @@ if PAGE == "Overview":
 
     st.write("")
     with st.container(border=True):
-        st.markdown('<div class="ptitle">&#128161; Key insights &amp; situation'
-                    '</div>', unsafe_allow_html=True)
-        ic, ch, mc = st.columns([1.5, 1.25, 1.25], gap="medium")
+        st.markdown('<div class="ptitle">&#128161; Situation &amp; location</div>',
+                    unsafe_allow_html=True)
+        mc, ic = st.columns([1, 1.6], gap="medium")
 
-        # -- interpretierte Aussagen --
-        ins = "".join(f'<div class="ins">&#10003; {t}</div>'
-                      for t in core.key_insights(F, RISK, CV, THRESHOLD))
-        ic.markdown(f"<div style='font-size:.76rem;color:{MUTED};text-transform:uppercase;"
-                    "letter-spacing:.05em;font-weight:600;margin-bottom:.45rem;'>"
-                    "What the forecast means</div>" + ins, unsafe_allow_html=True)
+        with mc:
+            st.markdown('<div class="subhead">Kaub &middot; Middle Rhine &middot; '
+                        'Rhine-km 546</div>', unsafe_allow_html=True)
+            pts = pd.DataFrame({"lat": [core.KAUB_LAT], "lon": [core.KAUB_LON],
+                                "name": ["Kaub gauge"]})
+            with st.container(border=True):
+                try:
+                    st.pydeck_chart(pdk.Deck(
+                        map_style="dark",
+                        initial_view_state=pdk.ViewState(
+                            latitude=core.KAUB_LAT, longitude=core.KAUB_LON,
+                            zoom=7.1, pitch=0),
+                        layers=[
+                            pdk.Layer("ScatterplotLayer", data=pts,
+                                      get_position="[lon, lat]",
+                                      get_fill_color=[239, 90, 90, 220],
+                                      get_radius=2800, pickable=True),
+                            pdk.Layer("ScatterplotLayer", data=pts,
+                                      get_position="[lon, lat]",
+                                      get_fill_color=[239, 90, 90, 50],
+                                      get_radius=11000),
+                        ],
+                        tooltip={"text": "{name}"}), height=232)
+                except Exception:
+                    st.map(pts, zoom=7, size=700, height=232)
+            st.caption("The controlling bottleneck of the Middle Rhine. "
+                       "If a vessel can pass Kaub, it can pass the corridor.")
 
-        # -- die Kette Wasserstand -> Tiefgang -> Ladung, als Kette lesbar --
-        chain = [("Gauge level", f"{F.iloc[-1]['lo']:.0f} cm",
-                  "day +7, lower bound &middot; relative to gauge datum"),
-                 ("Fairway depth", f"{CV.fairway_m:.2f} m",
-                  f"derived from the {THRESHOLD:.0f} cm reference level"),
-                 ("Safe draft", f"{CV.draft_m:.2f} m",
-                  f"minus {A.under_keel_clearance_m:.2f} m under-keel clearance"),
-                 ("Payload", f"{CV.forecast_t:,.0f} t",
-                  f"&minus;{CV.reduction_pct:.0f} % vs. full load"),
-                 ("Replacement", f"{CV.trucks} trucks",
-                  f"or {CV.trains} train(s)")]
-        rows = ""
-        for k, (lab, val, note) in enumerate(chain):
-            rows += (f"<div class='chain-row'>"
-                     f"<div class='chain-lab'>{lab}</div>"
-                     f"<div class='chain-val'>{val}</div>"
-                     f"<div class='chain-note'>{note}</div></div>")
-            if k < len(chain) - 1:
-                rows += "<div class='chain-arrow'>&#8595;</div>"
-        ch.markdown(f"<div style='font-size:.76rem;color:{MUTED};text-transform:uppercase;"
-                    "letter-spacing:.05em;font-weight:600;margin-bottom:.45rem;'>"
-                    "From level to action</div>" + rows, unsafe_allow_html=True)
-
-        # -- farbige Karte --
-        mc.markdown(f"<div style='font-size:.76rem;color:{MUTED};text-transform:uppercase;"
-                    "letter-spacing:.05em;font-weight:600;margin-bottom:.45rem;'>"
-                    "Location &middot; Kaub, Middle Rhine</div>", unsafe_allow_html=True)
-        pts = pd.DataFrame({"lat": [core.KAUB_LAT], "lon": [core.KAUB_LON],
-                            "name": ["Kaub gauge"]})
-        try:
-            with mc:
-                st.pydeck_chart(pdk.Deck(
-                    map_style="dark",
-                    initial_view_state=pdk.ViewState(
-                        latitude=core.KAUB_LAT, longitude=core.KAUB_LON,
-                        zoom=7.4, pitch=0),
-                    layers=[
-                        pdk.Layer("ScatterplotLayer", data=pts,
-                                  get_position="[lon, lat]",
-                                  get_fill_color=[224, 82, 82, 210],
-                                  get_radius=2600, pickable=True),
-                        pdk.Layer("ScatterplotLayer", data=pts,
-                                  get_position="[lon, lat]",
-                                  get_fill_color=[224, 82, 82, 55],
-                                  get_radius=9000),
-                    ],
-                    tooltip={"text": "{name}"}), height=215)
-        except Exception:
-            mc.map(pts, zoom=7, size=600, height=215)
-
-        st.caption("All figures use the lower bound of the 80 % interval and the "
-                   "cargo assumptions in Settings. Cargo at risk is the shortfall "
-                   "against a full load on day +7; stranded tonnes sum the daily "
-                   "shortfall across the horizon.")
+        with ic:
+            st.markdown('<div class="subhead">What this means for the next '
+                        'seven days</div>', unsafe_allow_html=True)
+            cards = "".join(f'<div class="ins-card">{t}</div>'
+                            for t in core.key_insights(F, RISK, CV, THRESHOLD))
+            st.markdown(f'<div class="ins-stack">{cards}</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                '<div class="foot">Every figure follows the lower bound of the '
+                '80 % interval and the cargo assumptions in Settings. Shortfall is '
+                'measured against a full load; the daily figures are summed across '
+                'the seven-day horizon.</div>', unsafe_allow_html=True)
 
 
 # ================================================================= Forecast
