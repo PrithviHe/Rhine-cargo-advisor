@@ -61,29 +61,56 @@ footnote if you cite it.
 
 ---
 
-## 2 · Reference vessel
+## 2 · Reference vessel — GMS 110, CEMT class Va
 
-| Constant | Current value | Source found | Document / URL | Checked by, date |
+| Constant | Value | Source found | Document | Checked |
 |---|---|---|---|---|
-| `vessel_name` | GMS 110 m | ☐ | | |
-| `max_draft_m` | 2.80 m | ☐ | | |
-| `light_draft_m` | 0.50 m | ☐ | | |
-| `max_payload_t` | 2,500 t | ☐ | | |
+| `vessel_name` | GMS 110 (CEMT Va) | ☑ | PLATINA3 D2.2, restating ECCONET | 29.09.2026 |
+| `min_draft_m` — T_min | **1.35 m** | ☑ | PLATINA3 D2.2, table of vessel characteristics | 29.09.2026 |
+| `max_draft_m` — T_max | **3.50 m** | ☑ | same table | 29.09.2026 |
+| `min_deadweight_t` at T_min | **400 t** | ☑ | same table | 29.09.2026 |
+| `max_deadweight_t` at T_max | **2,900 t** | ☑ | same table | 29.09.2026 |
 
-**Where to look**
+**Sources**
 
-- A shipping company's loading table (Abladetabelle) for a Großmotorgüterschiff
-- CCNR / ZKR vessel classification (CEMT class Va covers the 110 m motor vessel)
-- Any published draft-to-payload curve for the Middle Rhine
+- PLATINA3 (2022). *Deliverable D2.2 — Options for shallow-water / climate
+  resilient vessels.* Restates the ECCONET figures and defines T_min in a
+  footnote.
+- Beuthe, M. et al. (2013). *ECCONET: Climate change and navigation — vessel
+  characteristics and navigation parameters.* UNECE. Original source of the
+  1.35 m / 3.50 m / 2,873 t figures for the GMS 110.
+- UNECE (2019). *Classification of European inland waterways.* Gives the class
+  Va ranges: 95–110 m length, 11.4 m beam, 2.50–2.80 m draught,
+  1,500–3,000 t capacity.
+- Busch, D., Bergen, A., Wosniok, W. & Krause, K. (2021). *Analyse des
+  Schiffsverkehrs auf dem nordrhein-westfälischen Niederrhein 2018–2020*
+  (LANUV Fachbericht 122). Gives roughly 2,800 t for the Großes Rheinschiff on
+  the Lower Rhine — consistent order of magnitude.
 
-**What matters**
+**Two distinctions that matter**
 
-`payload_t()` currently interpolates linearly between the light draft and the
-maximum draft. Real loading curves are close to linear in the working range but
-not exactly. If you obtain a real table, replace the linear formula with a lookup
-and note the change here.
+*Class versus vessel.* CEMT class Va describes a range (2.50–2.80 m draught),
+not one ship. The GMS 110 is a specific reference configuration within that
+class with a 3.50 m maximum draught. Always write "reference vessel GMS 110,
+CEMT class Va" — never "CEMT Va has a draught of 3.50 m".
 
----
+*T_min is not zero cargo.* The PLATINA3 footnote defines T_min as the draught
+of the empty, stern-trimmed vessel measured from its lowest point, and states
+that stores or a small amount of cargo may still be on board. The same table
+gives a minimum deadweight of 400 t at that draught.
+
+Because both endpoints are given, `payload_t()` interpolates between two
+sourced points — 400 t at 1.35 m and 2,900 t at 3.50 m — instead of assuming
+zero cargo at T_min, which the source does not support.
+
+**One caveat to state in the presentation.** Deadweight includes bunkers,
+water and stores, so it slightly overstates the commercial cargo, most
+noticeably near the minimum draught. We model deadweight because that is what
+the source gives.
+
+**Operational consequence.** Below a safe draught of 1.35 m the reference
+vessel cannot pass at all. At Kaub that corresponds to a gauge reading of
+**52 cm**. Full deadweight is reached from **267 cm**.
 
 ## 3 · Replacement transport
 

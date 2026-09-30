@@ -32,8 +32,8 @@ HORIZONS = range(1, 8)
 QUANTILES = [0.1, 0.5, 0.9]
 TARGET_COVERAGE = 0.80
 
-TRAIN_END = "2021-08-31"     # bis hier wird angepasst
-CALIB_END = "2023-08-31"     # danach Kalibrierung, Rest bleibt Test
+TRAIN_END = "2021-08-31"     # model is fitted up to here
+CALIB_END = "2023-08-31"     # calibration window, remainder is the test set
 
 PARAMS = dict(n_estimators=400, learning_rate=0.05, num_leaves=15, max_depth=4,
               min_child_samples=30, subsample=0.8, subsample_freq=1,
@@ -50,13 +50,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     s = df[LEVEL_COL].astype(float)
     X = pd.DataFrame(index=df.index)
 
-    # Pegelhistorie
+    # Gauge history
     for L in [0, 1, 2, 3, 7, 14, 28]:
         X[f"level_lag_{L}"] = s.shift(L)
     X["level_change_1d"] = s.diff(1)
     X["level_change_3d"] = s.diff(3)
 
-    # Oberlieger und Abfluss
+    # Upstream gauge and discharge
     if UPSTREAM_COL in df.columns:
         u = df[UPSTREAM_COL].astype(float)
         for L in [1, 2, 3]:
@@ -68,18 +68,18 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
             X[f"discharge_lag_{L}"] = q.shift(L)
         X["discharge_change_1d"] = q.diff(1)
 
-    # Regen-Gedaechtnis und Temperatur
+    # Rainfall memory and temperature
     for w in [3, 7, 14, 30]:
         X[f"precip_{w}d"] = df[PRECIP_COL].astype(float).rolling(w).sum()
     for w in [3, 7]:
         X[f"temp_{w}d"] = df[TEMP_COL].astype(float).rolling(w).mean()
 
-    # Saison
+    # Season
     doy = df[DATE_COL].dt.dayofyear
     X["doy_sin"] = np.sin(2 * np.pi * doy / 365.25).values
     X["doy_cos"] = np.cos(2 * np.pi * doy / 365.25).values
 
-    # relative Kodierung
+    # relative encoding
     lvl = X["level_lag_0"]
     for c in X.columns:
         if c.startswith(("level_lag_", "upstream_lag_")) and c != "level_lag_0":
@@ -105,7 +105,7 @@ def main() -> None:
     report = []
 
     for h in HORIZONS:
-        y = s.shift(-h) - s                          # Ziel: Aenderung, nicht Niveau
+        y = s.shift(-h) - s                          # target: the change, not the level
         m = X.notna().all(axis=1) & y.notna()
         Xh, yh, dh = X[m], y[m], d[m]
         lvl = X.loc[m, "level_lag_0"].values
@@ -121,7 +121,7 @@ def main() -> None:
             models[q] = mdl
             joblib.dump(mdl, OUT / f"q{int(q * 100):02d}_h{h}.pkl")
 
-        # Split-Conformal auf dem Kalibrierfenster
+        # Split-conformal calibration on the calibration window
         lo_c = lvl[cal] + models[0.1].predict(Xh[cal])
         hi_c = lvl[cal] + models[0.9].predict(Xh[cal])
         mid_c = lvl[cal] + models[0.5].predict(Xh[cal])
@@ -132,10 +132,10 @@ def main() -> None:
         qhat = float(np.sort(scores)[k])
         meta[f"qhat_h{h}"] = qhat
 
-        # Residuen der Medianprognose -> Schwellenwahrscheinlichkeit in der App
+        # Residuals of the median forecast -> threshold probability in the app
         np.save(OUT / f"residuals_h{h}.npy", act_c - mid_c)
 
-        # Bewertung auf dem Testfenster
+        # Evaluation on the test window
         lo_t = lvl[tst] + models[0.1].predict(Xh[tst])
         hi_t = lvl[tst] + models[0.9].predict(Xh[tst])
         mid_t = lvl[tst] + models[0.5].predict(Xh[tst])
@@ -162,7 +162,7 @@ def main() -> None:
     rep = pd.DataFrame(report)
     rep.to_csv(OUT / "forecast_report.csv", index=False)
     print(rep.round(2).to_string(index=False))
-    print(f"\n{len(list(HORIZONS)) * len(QUANTILES)} Modelle gespeichert in {OUT}")
+    print(f"\n{len(list(HORIZONS)) * len(QUANTILES)} models saved to {OUT}")
 
 
 if __name__ == "__main__":

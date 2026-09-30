@@ -128,7 +128,7 @@ st.markdown(f"""
           align-items:center; box-sizing:border-box;}}
 
 
-  /* ---------- Aussagen als Karten statt als Liste ---------- */
+  /* ---------- Insights as cards rather than a list ---------- */
   .ins-stack {{display:flex; flex-direction:column; gap:.45rem;
                margin-top:.15rem;}}
   .ins-card {{background:{PANEL_2}; border:1px solid {BORDER};
@@ -186,16 +186,16 @@ for name, icon in NAV:
                          use_container_width=True,
                          type="primary" if st.session_state.page == name else "secondary"):
         st.session_state.page = name
-        st.rerun()          # sofort neu zeichnen, sonst bleibt der Balken eine Runde zurueck
+        st.rerun()          # redraw at once, otherwise the active bar lags one click
 PAGE = st.session_state.page
 
 st.sidebar.divider()
 if "ref_i" not in st.session_state:
     st.session_state.ref_i = int(VALID[-1])
 
-# Platzhalter: erscheint OBEN in der Anzeige, wird aber erst unten befuellt.
-# Streamlit verbietet es, den Zustand eines bereits erzeugten Widgets zu aendern -
-# deshalb muessen die Szenario-Buttons im Code VOR dem Datumsfeld stehen.
+# Placeholder: appears ABOVE in the layout but is filled further down.
+# Streamlit forbids changing the state of a widget that already exists in the
+# same run, so the scenario buttons must come BEFORE the date input in code.
 date_slot = st.sidebar.container()
 
 st.sidebar.markdown("**Scenarios**")
@@ -271,7 +271,7 @@ SC = STATUS_COLOR[RISK.level]
 
 
 def data_age():
-    """Alter des neuesten vollstaendigen Tages im Datensatz, in Tagen."""
+    """Age of the newest complete day in the dataset, in days."""
     return (pd.Timestamp.today().normalize() - DF["date"].max()).days
 
 
@@ -337,8 +337,8 @@ def forecast_chart(height=330, days=8):
     hist = (DF.loc[max(0, i - days):i, ["date", LEVEL]]
               .rename(columns={LEVEL: "level"}).assign(series="Historical"))
     p = F.assign(series="Forecast", band="80 % uncertainty range")
-    # Die kritische Linie muss IMMER sichtbar sein - sie ist der Bezugspunkt
-    # der gesamten Entscheidung, auch wenn sie ueber allen Messwerten liegt.
+    # The critical line must ALWAYS be visible - it is the reference point for
+    # the whole decision, even when it sits above every observed value.
     lo_all = min(hist.level.min(), F.lo.min(), THRESHOLD)
     hi_all = max(hist.level.max(), F.hi.max(), THRESHOLD)
     pad = 0.10 * max(1.0, hi_all - lo_all)
@@ -391,7 +391,7 @@ def forecast_chart(height=330, days=8):
     layers = [band, obs, fc, crit, clab, now, nlab]
     cross = F[F.status == "Critical"]
     if len(cross):
-        # nur ein dezenter Marker - der Tag steht als Text in der KPI-Karte
+        # a discreet marker only - the day itself is named on the KPI card
         layers.append(alt.Chart(cross.iloc[[0]]).mark_point(
             size=130, shape="diamond", filled=True, color=CRIT,
             stroke=PANEL, strokeWidth=1.2).encode(
@@ -418,15 +418,15 @@ if PAGE == "Overview":
 
     # ---------- executive summary ----------
     st.markdown(f'<div class="exec"><b>Executive summary</b>'
-                f'{core.executive_summary(F, RISK, CV, THRESHOLD)}</div>',
+                f'{core.executive_summary(F, RISK, CV, THRESHOLD, A)}</div>',
                 unsafe_allow_html=True)
     st.write("")
 
     # ---------- KPI row: chain order, decision-critical cards emphasised ----------
     c = st.columns([1, 1, 1.12, 1.12, 1.12], gap="small")
     spark = core.sparkline_values(DF, LEVEL, i, 10)
-    # Der Pegel hat einen willkuerlichen Nullpunkt - eine Prozentangabe waere
-    # irrefuehrend. Deshalb die Differenz in Zentimetern.
+    # The gauge has an arbitrary zero point, so a percentage would be
+    # misleading. Report the difference in centimetres instead.
     dev_cm = TODAY - NORMAL_LVL
     trend_word = ("falling" if spark[-1] < spark[0] - 1 else
                   "rising" if spark[-1] > spark[0] + 1 else "stable")
@@ -440,8 +440,8 @@ if PAGE == "Overview":
         f"<span style='opacity:.8;'>reading against gauge datum, not water depth</span>",
         spark=sparkline(spark, colour=CRIT if trend_word == "falling" else WATER))
 
-    # Wert und Spanne beziehen sich beide auf Tag +7. Der Zeitpunkt der
-    # Unterschreitung steht als Zusatzzeile darunter, nicht als Hauptwert.
+    # Value and range both refer to day +7. The day the level is first crossed
+    # appears as a sub-line, not as the headline figure.
     d7 = F.iloc[-1]
     if RISK.first_breach_h:
         f_sub = (f"Critical level reached on day +{RISK.first_breach_h} "
@@ -459,18 +459,29 @@ if PAGE == "Overview":
         spark=sparkline(F["mid"].tolist(), colour=f_col))
 
     d_pct = 100 * CV.draft_m / CV.normal_draft_m if CV.normal_draft_m else 100
-    kpi(c[2], "&#128674;", "Recommended draft", f"{CV.draft_m:.2f} m",
-        f"from {CV.fairway_m:.2f} m fairway depth<br>"
-        f"<b style='color:{CRIT if d_pct < 95 else OK}'>{d_pct:.0f} % of normal</b> "
-        f"({CV.normal_draft_m:.2f} m)",
-        accent=CRIT if d_pct < 95 else OK, primary=True)
+    if not CV.navigable:
+        draft_sub = (f"from {CV.fairway_m:.2f} m fairway depth<br>"
+                     f"<b style='color:{CRIT}'>{CV.draft_gap_m:.2f} m short of the "
+                     f"{A.min_draft_m:.2f} m minimum</b>")
+    else:
+        draft_sub = (f"from {CV.fairway_m:.2f} m fairway depth<br>"
+                     f"<b style='color:{CRIT if d_pct < 95 else OK}'>{d_pct:.0f} % of "
+                     f"normal</b> ({CV.normal_draft_m:.2f} m)")
+    kpi(c[2], "&#128674;", "Recommended draft", f"{CV.draft_m:.2f} m", draft_sub,
+        accent=CRIT if (d_pct < 95 or not CV.navigable) else OK, primary=True)
 
-    kpi(c[3], "&#128230;", "Recommended cargo", f"{CV.forecast_t:,.0f} t",
-        f"vs. {CV.normal_t:,.0f} t normal<br>"
-        f"<b style='color:{CRIT if CV.reduction_t else OK}'>"
-        f"&minus;{CV.reduction_t:,.0f} t ({CV.reduction_pct:.0f} %)</b>",
-        color=CRIT if CV.reduction_pct > 25 else None,
-        accent=CRIT if CV.reduction_t else OK, primary=True)
+    if not CV.navigable:
+        kpi(c[3], "&#128230;", "Recommended cargo", "Vessel cannot pass",
+            f"{A.vessel_name} needs {A.min_draft_m:.2f} m draft<br>"
+            f"<b style='color:{CRIT}'>all {CV.normal_t:,.0f} t must go by road "
+            f"or rail</b>", color=CRIT, accent=CRIT, primary=True)
+    else:
+        kpi(c[3], "&#128230;", "Recommended cargo", f"{CV.forecast_t:,.0f} t",
+            f"vs. {CV.normal_t:,.0f} t maximum<br>"
+            f"<b style='color:{CRIT if CV.reduction_t else OK}'>"
+            f"&minus;{CV.reduction_t:,.0f} t ({CV.reduction_pct:.0f} %)</b>",
+            color=CRIT if CV.reduction_pct > 25 else None,
+            accent=CRIT if CV.reduction_t else OK, primary=True)
 
     light = {"HIGH": "&#128308;", "MODERATE": "&#128992;",
              "WATCH": "&#128993;", "NORMAL": "&#128994;"}[RISK.level]
@@ -482,7 +493,9 @@ if PAGE == "Overview":
 
     # ---------- recommended actions, directly under the KPIs ----------
     acts = "".join(f"<li>{a}</li>" for a in core.recommendations(RISK, CV, A))
-    title = {"HIGH": "&#9888;&#65039; RECOMMENDED ACTIONS &middot; LOW-WATER WARNING",
+    title = {"HIGH": ("&#9940; RECOMMENDED ACTIONS &middot; VESSEL CANNOT PASS"
+                      if not CV.navigable else
+                      "&#9888;&#65039; RECOMMENDED ACTIONS &middot; LOW-WATER WARNING"),
              "MODERATE": "&#9888;&#65039; RECOMMENDED ACTIONS &middot; LOW-WATER WATCH",
              "WATCH": "&#9888;&#65039; RECOMMENDED ACTIONS &middot; ELEVATED UNCERTAINTY",
              "NORMAL": "&#9989; NORMAL CONDITIONS"}[RISK.level]
@@ -505,9 +518,16 @@ if PAGE == "Overview":
         with st.container(border=True):
             st.markdown('<div class="ptitle">&#128230; Cargo capacity</div>',
                         unsafe_allow_html=True)
-            bar("Normal capacity", CV.normal_t, CV.normal_t, NAVY)
-            bar("Available capacity", CV.forecast_t, CV.normal_t,
+            bar("Maximum deadweight", CV.normal_t, CV.normal_t, NAVY)
+            bar("Available at forecast level", CV.forecast_t, CV.normal_t,
                 OK if not CV.reduction_t else WATER)
+            if not CV.navigable:
+                st.markdown(
+                    f'<div class="loss" style="background:{CRIT}22;">'
+                    f'<span><b>Not navigable</b></span>'
+                    f'<span style="color:{CRIT};font-weight:700;">'
+                    f'draft {CV.draft_gap_m:.2f} m short</span></div>',
+                    unsafe_allow_html=True)
             st.markdown(
                 f'<div class="loss"><span><b>Capacity loss</b></span>'
                 f'<span style="color:{CRIT};font-weight:700;">'
@@ -525,11 +545,16 @@ if PAGE == "Overview":
                          f"{CV.stranded_7d_t:,.0f} t in total if one vessel "
                          "sails every day")
             m[1].metric("Replacement capacity", f"{CV.trucks} trucks")
-            vessel_note = (f"or {CV.trains} train(s) &middot; "
-                           f"+{CV.extra_vessels} vessel trips"
-                           if CV.extra_vessels <= 6 else
-                           f"or {CV.trains} train(s) &middot; waterway no longer "
-                           "a practical option at this level")
+            if not CV.navigable:
+                vessel_note = (f"or {CV.trains} train(s) &middot; the reference "
+                               "vessel cannot pass, so the whole volume moves "
+                               "by land")
+            elif CV.extra_vessels <= 6:
+                vessel_note = (f"or {CV.trains} train(s) &middot; "
+                               f"+{CV.extra_vessels} vessel trips")
+            else:
+                vessel_note = (f"or {CV.trains} train(s) &middot; waterway no "
+                               "longer a practical option at this level")
             m[1].caption(vessel_note)
 
     st.write("")
@@ -659,7 +684,22 @@ elif PAGE == "Cargo Planning":
 elif PAGE == "Transport Options":
     header()
     st.write("")
-    if CV.reduction_t <= 0:
+    if not CV.navigable:
+        st.error(f"**The reference vessel cannot pass.** {A.vessel_name} needs "
+                 f"{A.min_draft_m:.2f} m of draft; the forecast leaves "
+                 f"{CV.draft_m:.2f} m, short by {CV.draft_gap_m:.2f} m. The full "
+                 f"{CV.normal_t:,.0f} t has to move by road or rail. Navigation "
+                 f"becomes possible again from about {CV.navigable_from_cm:.0f} cm "
+                 "at the gauge.")
+        st.markdown("#### Replacement capacity required")
+        t = st.columns(3)
+        t[0].metric("Road", f"{CV.trucks} trucks",
+                    f"at {A.truck_payload_t:,.0f} t each", delta_color="off")
+        t[1].metric("Rail", f"{CV.trains} train(s)",
+                    f"at {A.train_payload_t:,.0f} t each", delta_color="off")
+        t[2].metric("Waterway", "unavailable",
+                    f"below {CV.navigable_from_cm:.0f} cm", delta_color="off")
+    elif CV.reduction_t <= 0:
         st.success("No alternative capacity required - full loading is possible "
                    "across the forecast horizon.")
     else:

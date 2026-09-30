@@ -15,7 +15,9 @@ import numpy as np
 import pandas as pd
 
 from modeling.cargo import (Assumptions, payload_t, safe_draft_m,
-                            available_depth_m, shortfall_range)
+                            available_depth_m, shortfall_range,
+                            is_navigable, min_navigable_level_cm,
+                            full_load_level_cm)
 from modeling.train_forecast import build_features
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,7 +62,7 @@ def make_forecast(df, X, meta, mods, resid, i: int, threshold: float) -> pd.Data
     out = []
     for h in meta["horizons"]:
         qh = meta[f"qhat_h{h}"]
-        # Nicht auf 0 begrenzen: der Pegel kann unter den Pegelnullpunkt fallen.
+        # Do not clamp at 0: the level can fall below the gauge datum.
         lo = today + mods[h][0.1].predict(row)[0] - qh
         mid = today + mods[h][0.5].predict(row)[0]
         hi = today + mods[h][0.9].predict(row)[0] + qh
@@ -131,12 +133,16 @@ class CargoView:
     reduction_pct: float
     draft_m: float
     normal_draft_m: float
-    fairway_m: float          # verfuegbare Fahrrinnentiefe, NICHT der Pegelwert
+    fairway_m: float          # available fairway depth, NOT the gauge reading
     normal_fairway_m: float
     trucks: int
     trains: int
     extra_vessels: int
     stranded_7d_t: float
+    navigable: bool           # False -> the reference vessel cannot pass at all
+    navigable_from_cm: float  # gauge reading at which it can sail again
+    full_load_from_cm: float  # gauge reading for full deadweight
+    draft_gap_m: float        # draft still missing when not navigable
 
 
 def cargo_view(F: pd.DataFrame, A: Assumptions, normal_level_cm: float) -> CargoView:
@@ -148,6 +154,8 @@ def cargo_view(F: pd.DataFrame, A: Assumptions, normal_level_cm: float) -> Cargo
     fc_t = payload_t(lo7, A)
     normal_t = A.max_payload_t
     red_t = max(0.0, normal_t - fc_t)
+    nav = is_navigable(lo7, A)
+    raw_draft = safe_draft_m(lo7, A)
 
     # stranded over the whole horizon: daily deficit at the lower bound, summed
     stranded = float(sum(max(0.0, normal_t - payload_t(r.lo, A)) for r in F.itertuples()))
@@ -163,10 +171,15 @@ def cargo_view(F: pd.DataFrame, A: Assumptions, normal_level_cm: float) -> Cargo
         normal_fairway_m=available_depth_m(normal_level_cm, A),
         trucks=int(-(-red_t // A.truck_payload_t)),
         trains=int(-(-red_t // A.train_payload_t)),
-        # Ab etwa sechs Zusatzfahrten ist der Wasserweg praktisch keine Option mehr.
-        # Eine zweistellige Zahl waere rechnerisch richtig, aber operativ sinnlos.
+        # Beyond roughly six extra sailings the waterway is no longer a practical
+        # option. A two-digit count would be arithmetically right but operationally
+        # meaningless, so it is capped.
         extra_vessels=(min(int(-(-red_t // fc_t)), 99) if fc_t > 0 else 0),
         stranded_7d_t=stranded,
+        navigable=nav,
+        navigable_from_cm=min_navigable_level_cm(A),
+        full_load_from_cm=full_load_level_cm(A),
+        draft_gap_m=max(0.0, A.min_draft_m - raw_draft),
     )
 
 
@@ -181,6 +194,16 @@ def normal_level(df: pd.DataFrame, level_col: str, ref_date, train_end: str) -> 
 
 def recommendations(risk: Risk, cv: CargoView, A: Assumptions) -> list[str]:
     """At most three concrete actions, derived from risk and cargo impact."""
+    if not cv.navigable:
+        return [
+            f"Do not dispatch the reference vessel: the forecast leaves "
+            f"{cv.draft_m:.2f} m of safe draft against a {A.min_draft_m:.2f} m "
+            f"minimum, short by {cv.draft_gap_m:.2f} m.",
+            f"Move the full volume by road or rail: about {cv.trucks} trucks "
+            f"or {cv.trains} train(s).",
+            f"The vessel becomes usable again from about "
+            f"{cv.navigable_from_cm:.0f} cm at the gauge.",
+        ]
     if risk.level in ("HIGH", "MODERATE"):
         return [
             f"Reduce vessel loading to {cv.forecast_t:,.0f} t "
@@ -195,8 +218,17 @@ def recommendations(risk: Risk, cv: CargoView, A: Assumptions) -> list[str]:
             "Check alternative capacity availability, do not book yet.",
             "Monitor the gauge daily.",
         ]
+    if cv.reduction_t > 0:
+        # No low-water risk, but full deadweight needs more water than the
+        # forecast provides.
+        return [
+            f"Load up to {cv.forecast_t:,.0f} t ({cv.draft_m:.2f} m draft) - "
+            f"{cv.reduction_pct:.0f} % below the vessel's maximum.",
+            f"Full deadweight needs about {cv.full_load_from_cm:.0f} cm at the gauge.",
+            "No alternative capacity needed; continue routine monitoring.",
+        ]
     return [
-        "Normal loading conditions expected - no reduction required.",
+        "Full loading possible - no reduction required.",
         "No alternative capacity needed.",
         "Continue routine monitoring.",
     ]
@@ -215,7 +247,12 @@ def key_insights(F: pd.DataFrame, risk: Risk, cv: CargoView, threshold: float) -
         out.append("Critical level lies inside the uncertainty range.")
     else:
         out.append("Critical level not reached within the forecast horizon.")
-    if cv.reduction_t > 0:
+    if not cv.navigable:
+        out.append(f"Reference vessel cannot pass: safe draft {cv.draft_m:.2f} m "
+                   f"is short of its minimum by {cv.draft_gap_m:.2f} m.")
+        out.append(f"Navigation resumes from about {cv.navigable_from_cm:.0f} cm "
+                   "at the gauge.")
+    elif cv.reduction_t > 0:
         out.append(f"Recommended cargo down {cv.reduction_t:,.0f} t "
                    f"({cv.reduction_pct:.0f} %) versus full load.")
         out.append("Alternative transport capacity likely required.")
@@ -225,9 +262,21 @@ def key_insights(F: pd.DataFrame, risk: Risk, cv: CargoView, threshold: float) -
 
 
 def executive_summary(F: pd.DataFrame, risk: Risk, cv: CargoView,
-                      threshold: float) -> str:
+                      threshold: float, A: Assumptions | None = None) -> str:
     """One management-level paragraph, generated from the current forecast."""
+    A_MIN_DRAFT = (A or Assumptions()).min_draft_m
     last = F.iloc[-1]
+    if not cv.navigable:
+        return (f"The gauge is expected to read {last['mid']:.0f} cm by day +7 "
+                f"(80 % range {last['lo']:.0f} to {last['hi']:.0f} cm). At the lower "
+                f"bound that leaves {cv.fairway_m:.2f} m of fairway depth and "
+                f"{cv.draft_m:.2f} m of safe draft \u2014 below the "
+                f"{A_MIN_DRAFT:.2f} m minimum draught of the reference vessel, short "
+                f"by {cv.draft_gap_m:.2f} m. The vessel cannot pass Kaub at all, "
+                f"whatever it carries, so the entire volume of {cv.normal_t:,.0f} t "
+                f"has to move by road or rail: roughly {cv.trucks} trucks or "
+                f"{cv.trains} train(s). Navigation becomes possible again from about "
+                f"{cv.navigable_from_cm:.0f} cm at the gauge.")
     if risk.level in ("HIGH", "MODERATE"):
         when = (f"in {risk.first_breach_h} day(s)" if risk.first_breach_h
                 else "within the horizon")
@@ -249,6 +298,14 @@ def executive_summary(F: pd.DataFrame, risk: Risk, cv: CargoView,
                 f"{risk.watch_days} of {len(F)} days. Plan loading at "
                 f"{cv.forecast_t:,.0f} t and check alternative capacity availability "
                 f"without booking yet.")
+    if cv.reduction_t > 0:
+        return (f"Water levels stay above the critical level of {threshold:.0f} cm "
+                f"across the full seven-day horizon, with day +7 at "
+                f"{last['mid']:.0f} cm. Loading is nevertheless capped at "
+                f"{cv.forecast_t:,.0f} t, {cv.reduction_pct:.0f} % below the "
+                f"vessel's {cv.normal_t:,.0f} t maximum: full deadweight requires "
+                f"about {cv.full_load_from_cm:.0f} cm at the gauge. No alternative "
+                f"transport capacity is required.")
     return (f"Water levels are expected to stay above the critical level of "
             f"{threshold:.0f} cm across the full seven-day horizon, with day +7 at "
             f"{last['mid']:.0f} cm. Full loading of {cv.normal_t:,.0f} t remains "

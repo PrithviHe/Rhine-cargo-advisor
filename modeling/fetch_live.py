@@ -30,13 +30,13 @@ PEGEL = "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations"
 METEO = "https://api.open-meteo.com/v1/forecast"
 
 KAUB_LAT, KAUB_LON = 50.08, 7.76
-# Kurznamen sind verifiziert; die UUIDs stehen als Rueckfallebene daneben.
+# Short names are verified; the UUIDs are noted as a fallback.
 STATION_LEVEL = "KAUB"          # Wasserstand W  [cm]   1d26e504-7f9e-480a-b52c-5932be6549ab
-STATION_UPSTREAM = "BINGEN"     # Oberlieger W   [cm]   0309cd61-90c9-470e-99d4-2ee4fb2c5f84
-STATION_DISCHARGE = "KAUB"      # Abfluss Q      [m3/s]
+STATION_UPSTREAM = "BINGEN"     # upstream gauge W [cm] 0309cd61-90c9-470e-99d4-2ee4fb2c5f84
+STATION_DISCHARGE = "KAUB"      # discharge Q    [m3/s]
 
 TZ = "Europe/Berlin"
-DAYS = 40                       # Puffer: laengstes Feature-Fenster ist 30 Tage
+DAYS = 40                       # buffer: the longest feature window is 30 days
 TIMEOUT = 30
 
 COLUMNS = ["date", "water_level_mean", "water_level_min", "water_level_max",
@@ -75,7 +75,7 @@ def fetch_gauge(station: str, series: str = "W", days: int = DAYS,
         raise LiveDataError(f"PEGELONLINE {station}/{series}: unexpected fields "
                             f"{list(df.columns)[:5]}")
     ts = pd.to_datetime(df["timestamp"], utc=True, format="ISO8601").dt.tz_convert(TZ)
-    # PEGELONLINE liefert 15-Minuten-Werte mit Zeitzonenoffset
+    # PEGELONLINE returns 15-minute values with a timezone offset
     return (pd.Series(pd.to_numeric(df["value"], errors="coerce").values, index=ts)
               .dropna().sort_index().rename(f"{station}_{series}"))
 
@@ -146,8 +146,8 @@ def to_daily(level: pd.Series, upstream: pd.Series, discharge: pd.Series,
     d.index.name = "date"
     d = d.reset_index()
 
-    # Nur vollstaendige Tage: unvollstaendige verzerren Summen und Minima.
-    # 96 Viertelstunden am Pegel, 24 Stunden beim Wetter.
+    # Complete days only: a partial day distorts sums and minima.
+    # 96 quarter-hours at the gauge, 24 hours of weather.
     d = d[(d["hours_available"] >= 24) & (d["n_readings"] >= 86)]
     d = d.dropna(subset=["water_level_mean", "precipitation_sum"])
     return d[COLUMNS].reset_index(drop=True)
