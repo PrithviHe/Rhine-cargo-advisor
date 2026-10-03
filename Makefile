@@ -1,4 +1,4 @@
-.PHONY: setup data train predict lab mlflow test format
+.PHONY: setup data train predict lab mlflow app test format
 
 setup:
 	uv sync --all-groups
@@ -14,6 +14,9 @@ predict:
 
 lab:
 	uv run jupyter lab
+
+app:
+	uv run streamlit run modeling/App.py
 
 mlflow:
 	uv run mlflow ui
