@@ -42,12 +42,18 @@ st.markdown("""
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3,[data-testid="stSidebar"] label,[data-testid="stSidebar"] .stCaption,[data-testid="stSidebar"] summary {color:#e6f1fa!important;}
 .block-container {padding-top:2rem;max-width:1600px;}
 .metric-card {background:white;border:1px solid #dfe8f0;border-radius:10px;padding:18px 14px;min-height:142px;box-shadow:0 3px 12px #173e6510;}
+[data-testid="stHeading"] h2, [data-testid="stHeading"] h3 {font-size:18px!important;font-weight:700;padding:0.4rem 0 0.3rem;}
+.data-intro h4 {font-size:18px;font-weight:700;color:#153b5a;margin:0 0 4px;padding:0;}
+.data-intro p {font-size:13px;color:#60798b;margin:0 0 10px;}
+.metric-card.compact {min-height:0;padding:12px 14px;}
+.metric-card.compact .card-value {font-size:16px;margin:8px 0 4px;}
+.metric-card.centered {display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
 .low-water-alert {animation:low-water-blink 1.4s ease-in-out infinite;}
 @keyframes low-water-blink {0%,100% {background:white;} 50% {background:#fde2e2;}}
 @media (prefers-reduced-motion:reduce){.low-water-alert{animation:none;background:#fde2e2;}}
-.card-label {font-size:11px;font-weight:700;letter-spacing:.6px;color:#567086;}
-.card-value {font-size:25px;font-weight:750;margin:12px 0 6px;color:#153b5a;}
-.card-detail {font-size:12px;color:#60798b;}
+.card-label {font-size:13px;font-weight:700;letter-spacing:.6px;color:#567086;}
+.card-value {font-size:18px;font-weight:750;margin:12px 0 6px;color:#153b5a;}
+.card-detail {font-size:13px;color:#60798b;}
 .bar-label {display:flex;justify-content:space-between;font-size:13px;margin:18px 0 8px;gap:10px;}
 .bar-track {background:#e7eff6;border-radius:8px;height:12px;margin-bottom:12px;}
 .banner {position:relative;border-radius:12px;overflow:hidden;margin-bottom:1.5rem;box-shadow:0 3px 12px #173e6520;}
@@ -58,6 +64,30 @@ st.markdown("""
 @media (max-width:700px){.banner-text{padding:12px 16px}.banner-text h1{font-size:18px}.banner-text p{font-size:12px}}
 </style>
 """, unsafe_allow_html=True)
+KAUB_LAT, KAUB_LON = 50.0855, 7.7650  # Kaub gauge on the Rhine
+
+
+def kaub_map(forecast=None, low_water=False):
+    """Small map of the Kaub gauge; the marker turns red at low water."""
+    hover = "<b>Kaub gauge</b><br>Rhine km 546"
+    if forecast is not None:
+        hover += f"<br>Forecast: {forecast:.1f} cm"
+    fig = go.Figure(go.Scattermap(
+        lat=[KAUB_LAT], lon=[KAUB_LON],
+        mode="markers+text",
+        marker=dict(size=14, color="#f00808" if low_water else "#168ac0"),
+        text=["Kaub"], textposition="top right",
+        textfont=dict(size=12, color="#163650"),
+        hovertemplate=hover + "<extra></extra>",
+    ))
+    fig.update_layout(
+        map=dict(style="open-street-map", center=dict(lat=KAUB_LAT, lon=KAUB_LON), zoom=11),
+        height=300,
+        margin=dict(l=0, r=0, t=0, b=0),
+    )
+    return fig
+
+
 st.sidebar.title("🚢 HydroLoad-AI")
 st.sidebar.caption("RHINE CARGO CAPACITY ADVISOR")
 
@@ -307,14 +337,41 @@ except ValueError as exc:
     st.error(f'Check vessel settings: {exc}')
     st.stop()
 
+@st.cache_data
+def data_coverage():
+    """First and last date of the historical daily water-level record."""
+    dates = pd.read_csv(DATA_PATH, usecols=["date"], parse_dates=["date"])["date"]
+    return dates.min(), dates.max()
+
+
+st.markdown(
+    '<div class="data-intro"><h4>Data behind the forecast</h4>'
+    '<p>Our model uses historical daily water levels at Kaub, precipitation, '
+    f'and temperature to forecast water levels {horizon} days ahead.</p></div>',
+    unsafe_allow_html=True,
+)
+first_day, last_day = data_coverage()
+data_cards = st.columns(3)
+for col, label, value, detail in [
+    (data_cards[0], 'HISTORICAL COVERAGE', f'{first_day:%B %Y} – {last_day:%B %Y}', 'Daily water level and weather'),
+    (data_cards[1], 'FORECAST HORIZON', f'{horizon} days ahead', f'Target date: {target_date:%d %b %Y}'),
+    (data_cards[2], 'LATEST OBSERVATION', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean'),
+]:
+    col.markdown(f'<div class="metric-card centered compact" style="border-top:4px solid #8aa4b8"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-detail">{detail}</div></div>', unsafe_allow_html=True)
+st.write('')
+
 low_water = forecast < threshold
+st.subheader('📡 Real-time forecast' if mode == 'Live forecast' else '🗓️ Historical forecast')
 cards = st.columns(5)
 for col, label, value, detail, colour in [
     (cards[0], 'OBSERVED GAUGE', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean', '#168ac0'),
     (cards[1], f'{horizon}-DAY FORECAST', f'{forecast:.1f} cm', f'{target_date:%d %b %Y} · {forecast-observed_level:+.1f} cm', '#f28b29'),
     (cards[2], 'AVAILABLE DRAFT', f"{cargo['available_draft_m']:.2f} m", 'Estimated depth minus clearance', '#4166b5'),
     (cards[3], 'CARGO BY VESSEL', f"{cargo['vessel_cargo_t']:,.0f} t", 'One vessel load · estimated', '#16a69a'),
-    (cards[4], 'FORECAST STATUS', 'Low water' if low_water else 'Above threshold', f'User threshold: {threshold} cm', "#f00808" if low_water else '#16a69a'),
+    (cards[4], 'FORECAST STATUS',
+     'Low water' if low_water else 'Above threshold',
+     f'Forecast: {forecast:.1f} cm on {target_date:%d %b}' if low_water else f'User threshold: {threshold} cm',
+     "#f00808" if low_water else '#16a69a'),
 ]:
     blink = ' low-water-alert' if label == 'FORECAST STATUS' and low_water else ''
     col.markdown(f'<div class="metric-card{blink}" style="border-top:4px solid {colour}"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-detail">{detail}</div></div>', unsafe_allow_html=True)
@@ -584,26 +641,69 @@ with overview:
             width = max(0, min(100, 100*amount/max_payload))
             st.markdown(f'<div class="bar-label">{label}<b>{amount:,.1f} t</b></div><div class="bar-track"><div style="width:{width}%;background:{colour};height:12px;border-radius:8px"></div></div>', unsafe_allow_html=True)
         st.write('')
+        heading = '**Operational Recommendation**\n\n'
         if cargo['insufficient_empty_draft']:
-            st.error('Estimated available draft is below the empty-vessel draft. No cargo is assigned to this vessel.')
+            st.error(heading + 'Estimated available draft is below the empty-vessel draft. No cargo is assigned to this vessel.', icon='⛔')
         elif low_water:
-            st.warning(f'Forecast below the configured low-water threshold on {target_date:%d %b}. Review the loading plan and updated conditions.')
+            st.warning(heading + f'Forecast below the configured low-water threshold on {target_date:%d %b}. Review the loading plan and updated conditions.', icon='⚠️')
         else:
-            st.info('Forecast above the configured threshold. Cargo capacity still depends on vessel and depth assumptions.')
+            st.info(heading + 'Forecast above the configured threshold. Cargo capacity still depends on vessel and depth assumptions.', icon='✅')
         st.caption('Threshold status is a rule-based indicator, not a probability of risk or a navigation clearance.')
-    st.subheader('Transport planning')
-    a, b, c, d = st.columns(4)
-    a.metric('Requested cargo', f'{requested:,.1f} t')
-    b.metric('Remaining after one vessel load', f"{cargo['remaining_t']:,.1f} t")
-    c.metric('Truckloads for remaining cargo', f"{cargo['truckloads']:,}")
-    d.metric('Estimated water depth', f"{cargo['depth_m']:.2f} m")
+    st.subheader('🚛 Cargo Planning')
+    plan_cards = st.columns(4)
+    for col, label, value, detail, colour in [
+        (plan_cards[0], 'REQUESTED CARGO', f'{requested:,.1f} t', 'Total to transport', '#1677b8'),
+        (plan_cards[1], 'REMAINING AFTER ONE VESSEL LOAD', f"{cargo['remaining_t']:,.1f} t", 'Cargo the vessel cannot take', '#f28b29'),
+        (plan_cards[2], 'TRUCKLOADS FOR REMAINING CARGO', f"{cargo['truckloads']:,}", f'{truck_capacity:g} t per truck', '#4166b5'),
+        (plan_cards[3], 'ESTIMATED WATER DEPTH', f"{cargo['depth_m']:.2f} m", 'At the forecast gauge level', '#16a69a'),
+    ]:
+        col.markdown(f'<div class="metric-card centered" style="border-top:4px solid {colour}"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-detail">{detail}</div></div>', unsafe_allow_html=True)
     st.caption(f'Truckloads assume {truck_capacity:g} tonnes per truck. Cargo estimates use a simplified linear draft–payload relationship.')
     if actual is not None and pd.notna(actual):
         st.info(f'Recorded target level: {actual:.1f} cm. Forecast minus recorded level: {forecast-actual:+.1f} cm. This historical view is not an independent test evaluation.')
+
+    st.subheader('📍 Kaub gauge location')
+    st.plotly_chart(kaub_map(forecast, low_water), width='stretch', config={'displaylogo': False})
+    st.caption('Marker turns red when the forecast is below the low-water threshold.')
 with details:
     st.subheader('Forecast inputs')
     st.dataframe(row[feature_names], use_container_width=True)
     st.write(f'The saved model predicts Kaub daily mean gauge level {horizon} days after the reference date. Live inputs use completed observation days.')
+
+    st.subheader('📊 Feature importance')
+    def feature_label(name):
+        """Readable name for a model feature such as lag_7 or precip_30d."""
+        kind, _, n = name.partition('_')
+        n = n.rstrip('d')
+        if kind == 'lag':
+            return 'Water level, reference day' if n == '0' else f"Water level, {n} day{'s' if n != '1' else ''} earlier"
+        if kind == 'precip':
+            return f'Precipitation, {n}-day total'
+        if kind == 'temp':
+            return f'Temperature, {n}-day mean'
+        return name
+    importance = pd.Series(
+        model.feature_importances_, index=[feature_label(f) for f in feature_names]
+    ).sort_values() * 100
+    importance_fig = go.Figure(go.Bar(
+        x=importance.values, y=importance.index, orientation='h',
+        marker_color='#168ac0',
+        text=[f'{v:.1f}%' for v in importance.values], textposition='outside',
+        hovertemplate='<b>%{y}</b><br>%{x:.1f}% of total gain<extra></extra>',
+    ))
+    importance_fig.update_layout(
+        height=460, margin=dict(l=10, r=40, t=10, b=10),
+        paper_bgcolor='white', plot_bgcolor='white',
+        font=dict(family='Arial, sans-serif', size=12, color='#163650'),
+        xaxis_title='Importance (% of total gain)',
+        yaxis_title='Model input feature',
+    )
+    importance_fig.update_xaxes(ticksuffix='%', gridcolor='#EDF2F7', range=[0, importance.max() * 1.15])
+    st.plotly_chart(importance_fig, width='stretch', config={'displaylogo': False})
+    st.caption(
+        'Gain: how much each feature improves the XGBoost model when it is used in a split, '
+        'as a share of the total. It shows what the model relies on, not cause and effect.'
+    )
     st.subheader('Cargo assumptions')
     st.write('Estimated depth = reference depth + (forecast gauge − reference gauge) / 100. Available draft = estimated depth − clearance. Payload is scaled linearly between empty and full-load draft, and capped at maximum payload.')
     st.caption('Gauge level is not navigation depth. These prototype estimates require verified route depths and vessel assumptions and do not establish safe navigation.')
