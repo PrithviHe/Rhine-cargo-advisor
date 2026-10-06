@@ -30,7 +30,7 @@ st.set_page_config(
 
     page_title="HydroLoad-AI",
 
-    page_icon="🚢",
+    page_icon=":material/directions_boat:",
     layout="wide",
 
 )
@@ -38,9 +38,16 @@ st.set_page_config(
 st.markdown("""
 <style>
 .stApp {background:#f3f7fb;color:#163650;}
-[data-testid="stSidebar"] {background:#102f49;}
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3,[data-testid="stSidebar"] label,[data-testid="stSidebar"] .stCaption,[data-testid="stSidebar"] summary {color:#e6f1fa!important;}
-.block-container {padding-top:2rem;max-width:1600px;}
+[data-testid="stSidebar"] {background:#0f4c5c;}
+[data-testid="stSidebarHeader"] {height:2.5rem;min-height:0;padding-top:0.5rem;padding-bottom:0;}
+[data-testid="stSidebarUserContent"] {padding-top:0;}
+[data-testid="stSidebarUserContent"] h1 {padding-top:0;}
+[data-testid="stSidebar"] * {color:#e6f1fa!important;}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * {color:#b9d3dc!important;}
+[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] *,[data-testid="stSidebar"] input {color:#163650!important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] details {border-color:#ffffff40;}
+[data-testid="stSidebar"] hr {border-color:#ffffff33;}
+.block-container {padding-top:4rem;max-width:1600px;}
 .metric-card {background:white;border:1px solid #dfe8f0;border-radius:10px;padding:18px 14px;min-height:142px;box-shadow:0 3px 12px #173e6510;}
 [data-testid="stHeading"] h2, [data-testid="stHeading"] h3 {font-size:18px!important;font-weight:700;padding:0.4rem 0 0.3rem;}
 .data-intro h4 {font-size:18px;font-weight:700;color:#153b5a;margin:0 0 4px;padding:0;}
@@ -57,11 +64,9 @@ st.markdown("""
 .bar-label {display:flex;justify-content:space-between;font-size:13px;margin:18px 0 8px;gap:10px;}
 .bar-track {background:#e7eff6;border-radius:8px;height:12px;margin-bottom:12px;}
 .banner {position:relative;border-radius:12px;overflow:hidden;margin-bottom:1.5rem;box-shadow:0 3px 12px #173e6520;}
-.banner img {display:block;width:100%;height:auto;}
-.banner-text {position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-start;padding:22px 28px;background:linear-gradient(to bottom,#102f49e6 0%,#102f4966 45%,transparent 100%);}
-.banner-text h1 {color:white!important;font-size:30px;margin:0;padding:0;}
-.banner-text p {color:#e6f1fa;font-size:14px;margin:6px 0 0;}
-@media (max-width:700px){.banner-text{padding:12px 16px}.banner-text h1{font-size:18px}.banner-text p{font-size:12px}}
+.banner img {display:block;width:100%;height:280px;object-fit:cover;object-position:center 85%;}
+.page-title {font-size:22px;font-weight:700;color:#153b5a;line-height:1.5;padding-top:2px;margin:0 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:900px){.banner img{height:180px}.page-title{font-size:15px}}
 </style>
 """, unsafe_allow_html=True)
 KAUB_LAT, KAUB_LON = 50.0855, 7.7650  # Kaub gauge on the Rhine
@@ -88,7 +93,7 @@ def kaub_map(forecast=None, low_water=False):
     return fig
 
 
-st.sidebar.title("🚢 HydroLoad-AI")
+st.sidebar.title(":material/directions_boat: HydroLoad-AI")
 st.sidebar.caption("RHINE CARGO CAPACITY ADVISOR")
 
 BANNER_PATH = ROOT / "images" / "4_kaub.jpg"
@@ -105,18 +110,26 @@ def banner_base64(path, max_width=1800):
     return base64.b64encode(buffer.getvalue()).decode()
 
 
-title = "🚢 Rhine Water-Level Forecasting and Cargo Decision Support"
-subtitle = "Rhine water-level forecast & cargo planning · Kaub, Germany"
+# Material "directions_boat" icon, inlined because the banner is raw HTML.
+BOAT_SVG = (
+    '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" '
+    'style="vertical-align:-0.12em;margin-right:0.3em"><path d="M20 21c-1.39 0-2.78-.47-4-1.32'
+    '-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 '
+    '5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 '
+    '2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6'
+    '-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26'
+    '-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/></svg>'
+)
+title = "Rhine Water-Level Forecasting and Cargo Decision Support"
 if BANNER_PATH.exists():
     st.markdown(f"""
+<div class="page-title">{BOAT_SVG}{title}</div>
 <div class="banner">
   <img src="data:image/jpeg;base64,{banner_base64(str(BANNER_PATH))}" alt="Rhine at Kaub">
-  <div class="banner-text"><h1>{title}</h1><p>{subtitle}</p></div>
 </div>
 """, unsafe_allow_html=True)
 else:
-    st.title(title)
-    st.caption(subtitle)
+    st.title(f":material/directions_boat: {title}")
 
 # Load the saved model
 @st.cache_resource
@@ -345,17 +358,18 @@ def data_coverage():
 
 
 st.markdown(
-    '<div class="data-intro"><h4>Data behind the forecast</h4>'
+    '<div class="data-intro"><h4>Behind the forecast</h4>'
     '<p>Our model uses historical daily water levels at Kaub, precipitation, '
     f'and temperature to forecast water levels {horizon} days ahead.</p></div>',
     unsafe_allow_html=True,
 )
 first_day, last_day = data_coverage()
-data_cards = st.columns(3)
+data_cards = st.columns(4)
 for col, label, value, detail in [
     (data_cards[0], 'HISTORICAL COVERAGE', f'{first_day:%B %Y} – {last_day:%B %Y}', 'Daily water level and weather'),
-    (data_cards[1], 'FORECAST HORIZON', f'{horizon} days ahead', f'Target date: {target_date:%d %b %Y}'),
-    (data_cards[2], 'LATEST OBSERVATION', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean'),
+    (data_cards[1], 'MODEL USED', 'XGBoost', f'Gradient-boosted trees · {len(feature_names)} input features'),
+    (data_cards[2], 'FORECAST HORIZON', f'{horizon} days ahead', f'Target date: {target_date:%d %b %Y}'),
+    (data_cards[3], 'LATEST OBSERVATION', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean'),
 ]:
     col.markdown(f'<div class="metric-card centered compact" style="border-top:4px solid #8aa4b8"><div class="card-label">{label}</div><div class="card-value">{value}</div><div class="card-detail">{detail}</div></div>', unsafe_allow_html=True)
 st.write('')
@@ -649,7 +663,7 @@ with overview:
         else:
             st.info(heading + 'Forecast above the configured threshold. Cargo capacity still depends on vessel and depth assumptions.', icon='✅')
         st.caption('Threshold status is a rule-based indicator, not a probability of risk or a navigation clearance.')
-    st.subheader('🚛 Cargo Planning')
+    st.subheader('📦 Cargo Planning')
     plan_cards = st.columns(4)
     for col, label, value, detail, colour in [
         (plan_cards[0], 'REQUESTED CARGO', f'{requested:,.1f} t', 'Total to transport', '#1677b8'),
