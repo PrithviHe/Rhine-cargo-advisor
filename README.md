@@ -1,153 +1,59 @@
-# ds-modeling-pipeline
+# 🚢 HydroLoad-AI — Rhine Cargo Capacity Advisor
 
-Here you find a Skeleton project for building a simple model in a python script or notebook and log the results on MLFlow.
+Forecasts the Rhine water level at **Kaub** 7 days ahead and turns it into a barge
+loading recommendation: will the level fall below the low-water threshold, and how
+much cargo can one vessel still carry?
 
-There are two ways to do it: 
-* In Jupyter Notebooks:
-    We train a simple model in the [jupyter notebook](notebooks/EDA-and-modeling.ipynb), where we select only some features and do minimal cleaning. The hyperparameters of feature engineering and modeling will be logged with MLflow
+![Dashboard](images/4_dashboard.png)
 
-* With Python scripts:
-    The [main script](modeling/train.py) will go through exactly the same process as the jupyter notebook and also log the hyperparameters with MLflow
+## Why Kaub?
+Kaub is the shallowest point on the Middle Rhine. When the gauge drops, barges must
+sail part-loaded and the remaining cargo moves to trucks — costly for shippers.
 
-Data used is the [coffee quality dataset](https://github.com/jldbc/coffee-quality-database).
+## Data
+| Source | Content | Period |
+|---|---|---|
+| Kaub gauge | Water level, 15-min, in cm | 2000 – 2026 |
+| Open-Meteo archive | Daily precipitation and temperature (50.08 N, 7.76 E) | 2000 – 2026 |
 
-## Requirements
+**Pitfall:** the gauge records Europe/Berlin local time (with DST), while Open-Meteo
+returns a fixed UTC offset. Joining on printed timestamps misaligns the data for about
+5 months a year, so `modeling/data_pipeline.py` converts both to UTC before joining
+(covered by `tests/test_data_pipeline.py`).
 
-- [uv](https://docs.astral.sh/uv/) (it installs the right Python for you — no pyenv, conda or pip needed)
+## Approach
+- Features: water-level lags (0–28 days), 3/7/14/30-day rain sums, 3/7-day mean temperature
+- Baselines: persistence and a linear autoregressive model (notebooks 03–04)
+- Final model: XGBoost regressor, 7-day horizon, served in a Streamlit dashboard
 
-Install uv once per machine:
+## Results
+- At a 7-day horizon, **no model beats persistence at low water**: persistence has
+  the lowest MAE in every regime below 150 cm.
+- Linear models over-predict low water by ~45 cm, the dangerous direction for
+  load planning; adding weather features halves that error.
+- Lesson: report low-water error and missed alarms, not just overall MAE.
 
+## Run it
 ```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+make setup                                # install with uv
+make data                                 # rebuild data/processed/
+uv run streamlit run modeling/App.py      # start the dashboard
+make test                                 # run tests
 ```
 
-### Setup
-
-```bash
-make setup
-
-# or directly
-uv sync --all-groups
+## Project structure
+```
+data/raw/         raw gauge and discharge CSVs
+data/processed/   daily/hourly merged data (built by make data)
+modeling/         data pipeline, real-time pipeline, cargo model, Streamlit app
+models/           saved XGBoost model
+notebooks/        01 import · 02 EDA · 03–04 baselines
+tests/            timezone/join tests
 ```
 
-That creates `.venv/`, downloads a suitable Python (`>=3.11`) if you don't have one, and installs
-every dependency pinned in `uv.lock` so the whole team gets identical versions.
+## Limitations & next steps
+- Gauge level is not navigable depth; vessel values in the app are examples.
+- Add the upstream gauge at Bingen and discharge as features.
 
-Dependencies are declared in `pyproject.toml`: the runtime set under `[project.dependencies]`
-(what deployment of the model or a dashboard needs) and the development tools — JupyterLab,
-pytest, black, nbdime — under the `dev` group. Use `uv sync` for runtime only, or
-`uv sync --all-groups` for everything.
-
-See [UV_SETUP.md](UV_SETUP.md) for the full guide: adding and upgrading packages, pinning the
-Python version, and troubleshooting.
-
-The MLFLOW URI should **not be stored on git**, you have two options, to save it locally in the `.mlflow_uri` file:
-
-```BASH
-echo http://127.0.0.1:5000/ > .mlflow_uri
-```
-
-This will create a local file where the uri is stored which will not be added on github (`.mlflow_uri` is in the `.gitignore` file). Alternatively you can export it as an environment variable with
-
-```bash
-export MLFLOW_URI=http://127.0.0.1:5000/
-```
-
-This links to your local mlflow, if you want to use a different one, then change the set uri.
-
-The code in the [config.py](modeling/config.py) will try to read it locally and if the file doesn't exist will look in the env var.. IF that is not set the URI will be empty in your code.
-
-## Usage
-
-### Creating an MLFlow experiment
-
-You can do it via the GUI or via [command line](https://www.mlflow.org/docs/latest/tracking.html#managing-experiments-and-runs-with-the-tracking-service-api) if you use the local mlflow:
-
-```bash
-uv run mlflow experiments create --experiment-name 0-template-ds-modeling
-```
-
-Check your local mlflow
-
-```bash
-uv run mlflow ui
-```
-
-and open the link [http://127.0.0.1:5000](http://127.0.0.1:5000)
-
-This will throw an error if the experiment already exists. **Save the experiment name in the [config file](modeling/config.py).**
-
-In order to train the model and store test data in the data folder and the model in models run:
-
-```bash
-uv run python -m modeling.train
-
-# or
-make train
-```
-
-In order to test that predict works on a test set you created run:
-
-```bash
-uv run python -m modeling.predict models/linear data/X_test.csv data/y_test.csv
-
-# or
-make predict
-```
-
-## About MLFLOW -- delete this when using the template
-
-MLFlow is a tool for tracking ML experiments. You can run it locally or remotely. It stores all the information about experiments in a database.
-And you can see the overview via the GUI or access it via APIs. Sending data to mlflow is done via APIs. And with mlflow you can also store models on S3 where you version them and tag them as production for serving them in production.
-![mlflow workflow](images/0_general_tracking_mlflow.png)
-
-### MLFlow GUI
-
-You can group model trainings in experiments. The granularity of what an experiment is up to your usecase. Recommended is to have an experiment per data product, as for all the runs in an experiment you can compare the results.
-![gui](images/1_gui.png)
-
-### Code to send data to MLFlow
-
-In order to send data about your model you need to set the connection information, via the tracking uri and also the experiment name (otherwise the default one is used). One run represents a model, and all the rest is metadata. For example if you want to save train MSE, test MSE and validation MSE you need to name them as 3 different metrics.
-If you are doing CV you can set the tracking as nested.
-![mlflow code](images/2_code.png)
-
-### MLFlow metadata
-
-There is no constraint between runs to have the same metadata tracked. I.e. for one run you can track different tags, different metrics, and different parameters (in cv some parameters might not exist for some runs so this .. makes sense to be flexible).
-
-- tags can be anything you want.. like if you do CV you might want to tag the best model as "best"
-- params are perfect for hypermeters and also for information about the data pipeline you use, if you scaling vs normalization and so on
-- metrics.. should be numeric values as these can get plotted
-
-![mlflow metadata](images/3_metadata.png)
-
-## Development Notes
-
-### Handling Merge Conflicts in Jupyter Notebooks
-
-When working collaboratively, merge conflicts may occur in `.ipynb` files because notebooks are stored as JSON.  
-To simplify resolving these conflicts, this project uses **nbdime** (already included in the `dev` dependency group).
-
-#### Enable once
-After setting up your environment, enable nbdime for Git:
-```bash
-nbdime config-git --enable
-```
-
-#### When a merge conflict occurs
-Run the following command to open the merge tool:
-```bash
-nbdime mergetool
-```
-A browser window will open showing both notebook versions side by side.
-Select the correct cells, save, and then complete the merge:
-```bash
-git add <notebook>.ipynb
-git commit -m "Resolve notebook merge conflict"
-```
-That’s it — clean merges for notebooks!
+## Authors
+Prithvi Hegde — neuefische Data Science Bootcamp
