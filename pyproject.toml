@@ -12,6 +12,11 @@ dependencies = [
     "statsmodels",
     "mlflow",
     "parsenvy",
+    "xgboost>=3.2.0",
+    "lightgbm>=4.7.0",
+    "tabicl>=2.2.0",
+    "streamlit>=1.64.0",
+    "plotly>=7.1.0",
 ]
 
 [dependency-groups]
@@ -26,3 +31,9 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+# modeling/ is imported as a namespace package from the repo root, not installed
+# (tool.uv package = false), so pytest needs the root on sys.path.
+pythonpath = ["."]
+testpaths = ["tests"]

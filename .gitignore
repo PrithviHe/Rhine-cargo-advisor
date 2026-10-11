@@ -126,7 +126,7 @@ venv.bak/
 dmypy.json
 
 
-data/*.csv
+#data/*.csv
 models/*.sav
 mlruns
 models/*

@@ -1,0 +1,15 @@
+{
+  "updated_utc": "2026-09-28T13:10:04+00:00",
+  "rows": 9767,
+  "data_start": "2000-01-01",
+  "data_end": "2026-09-27",
+  "history_end": "2026-09-01",
+  "live_days_added": 26,
+  "latest_level_cm": -0.6041666666666666,
+  "sources": {
+    "gauge": "PEGELONLINE KAUB/W",
+    "upstream": "PEGELONLINE BINGEN/W",
+    "discharge": "PEGELONLINE KAUB/Q",
+    "weather": "Open-Meteo hourly observations"
+  }
+}
