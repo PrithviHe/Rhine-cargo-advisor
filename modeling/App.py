@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from modeling.realtime_pipeline import realtime_pipeline
 from modeling.cargo_calculation import estimate_cargo
-MODEL_PATH = ROOT / "models" / "water_level_model.joblib"
+MODEL_PATH = ROOT / "models" / "kaub_xgboost_04.joblib"
 DATA_PATH = ROOT / "data" / "processed" / "kaub_hydro_weather_daily.csv"
 
 
@@ -378,7 +378,7 @@ low_water = forecast < threshold
 st.subheader('📡 Real-time forecast' if mode == 'Live forecast' else '🗓️ Historical forecast')
 cards = st.columns(5)
 for col, label, value, detail, colour in [
-    (cards[0], 'OBSERVED GAUGE', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean', '#168ac0'),
+    (cards[0], 'OBSERVED LEVEL', f'{observed_level:.1f} cm', f'{origin:%d %b %Y} · daily mean', '#168ac0'),
     (cards[1], f'{horizon}-DAY FORECAST', f'{forecast:.1f} cm', f'{target_date:%d %b %Y} · {forecast-observed_level:+.1f} cm', '#f28b29'),
     (cards[2], 'AVAILABLE DRAFT', f"{cargo['available_draft_m']:.2f} m", 'Estimated depth minus clearance', '#4166b5'),
     (cards[3], 'CARGO BY VESSEL', f"{cargo['vessel_cargo_t']:,.0f} t", 'One vessel load · estimated', '#16a69a'),
