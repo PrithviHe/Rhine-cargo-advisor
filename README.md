@@ -270,11 +270,11 @@ The following values summarize the reported project experiments. Small differenc
 | Model | Test MAE | Test RMSE | Test R² |
 |---|---:|---:|---:|
 | Persistence baseline | Approximately 50.8 cm | Approximately 72.5 cm | Approximately 0.583 |
-| Selected XGBoost model | Approximately 47.6–48.0 cm | Approximately 64.1–64.8 cm | Approximately 0.673 |
+| Selected XGBoost model | Approximately 43.6–48.0 cm | Approximately 56.23 cm | Approximately 0.673 |
 
 Using the reported MAE values of 50.816 cm and 47.552 cm:
 
-**MAE skill = (50.816 − 47.552) / 50.816 × 100 ≈ 6.4%**
+**MAE = (50.816 − 47.552) / 50.816 × 100 ≈ 6.4%**
 
 This represents a modest improvement over persistence. It does not establish that every forecast is better or that the estimates are sufficiently accurate for operational loading decisions.
 
