@@ -698,9 +698,7 @@ Add the complete team member list and contributor links before publication.
 
 ## License and data usage
 
-Add the intended software license as a LICENSE file before describing this repository as licensed for reuse.
-
-Source datasets and external services may have separate attribution and usage requirements. A software license does not automatically grant redistribution rights for source data.
+Need to add.....
 
 ---
 
