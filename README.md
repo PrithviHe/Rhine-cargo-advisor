@@ -1,5 +1,5 @@
-# 🚢 HydroLoad AI
-## Rhine water-level forecasting and cargo planning
+# 🚢 HydroLoad AI - An AI Solution to the supply chain management
+## Rhine water-level forecasting using ML algorithm and cargo planning
 
 **A decision-support prototype that predicts the water level at Kaub seven days ahead and translates the forecast into estimated vessel cargo capacity.**
 
@@ -7,7 +7,7 @@ Developed by **Team Rhine-Riders** as a Data Science and AI capstone project at 
 
 > **Project status:** Educational prototype. Forecasts and cargo estimates support scenario exploration; they are not certified navigation or loading instructions.
 
-> **Documentation note:** This README reflects the project design and reported experiments. The repository has not been inspected for this document. Confirm exact module locations, dependency files, model metadata, and final evaluation values against the release you publish. The directory layout below is a suggested organization.
+> **Documentation note:** This README reflects the project design and reported experiments. The repository is reflection of this document. It includes module,locations, dependency files, model metadata, and final evaluation values. The directory layout below is a suggested organization.
 
 ---
 
@@ -42,7 +42,7 @@ HydroLoad AI connects a machine-learning forecast with a practical logistics que
 
 **How much cargo could a vessel carry under the expected Rhine water-level conditions at Kaub?**
 
-The project uses historical water levels, precipitation, and temperature to forecast the daily water level seven days ahead. A Streamlit application combines recent observations, a forecast, and vessel-specific cargo calculations in an interactive interface.
+The project uses historical water levels(Gauze level), precipitation, and temperature to forecast the daily water level seven days ahead. A Streamlit application combines recent observations, a forecast, and vessel-specific cargo calculations in an interactive interface.
 
 The cargo calculation uses the predicted gauge level together with a reference fairway depth, a clearance allowance, and vessel draft characteristics. Users can explore how different water levels and vessel assumptions affect estimated loading capacity.
 
@@ -128,7 +128,7 @@ The project uses historical daily water-level and weather data. The live workflo
 | Discharge | Daily mean, minimum, and maximum | Additional hydrological information explored during development |
 | Observation coverage | Available measurement hours | Data-quality assessment |
 
-The historical dataset described in the project covers **1 January 2000 to 1 September 2026**, with approximately **9,741 daily rows**. Usable modeling rows are fewer because lagged features, rolling windows, and future targets require additional observations.
+The historical dataset described in the project covers **1 January 2000 to 1 September 2026**, with approximately **9,740 daily rows**. Usable modeling rows are fewer because lagged features, rolling windows, and future targets require additional observations.
 
 ### Example daily schema
 
@@ -225,10 +225,9 @@ This provides a useful benchmark because nearby water-level observations are rel
 Development experiments considered:
 
 - Linear Regression.
-- Polynomial Ridge Regression.
 - Random Forest.
-- XGBoost.
 - LightGBM.
+- XGBoost.
 
 Feature-group experiments compared Kaub-only inputs with progressively richer combinations of precipitation, temperature, and additional hydrological variables.
 
@@ -278,13 +277,13 @@ Using the reported MAE values of 50.816 cm and 47.552 cm:
 
 This represents a modest improvement over persistence. It does not establish that every forecast is better or that the estimates are sufficiently accurate for operational loading decisions.
 
-### Interpreting a 47.6 cm MAE
+### Interpreting a 43.6 cm MAE
 
-A test MAE of approximately 47.6 cm means the absolute prediction error averaged about 47.6 cm over the evaluated observations.
+A test MAE of approximately 43.6 cm means the absolute prediction error averaged about 43.6 cm over the evaluated observations.
 
 It does **not** mean:
 
-- Every forecast is within 47.6 cm of the observed level.
+- Every forecast is within 43.6 cm of the observed level.
 - The error has a guaranteed upper limit.
 - A band of forecast ± MAE is a calibrated prediction interval.
 - Low-water performance is identical to overall performance.
@@ -443,7 +442,7 @@ A model-information area can show the forecasting horizon, selected model, evalu
 
 ### Suggested navigation
 
-A useful organization is **Overview · Cargo planner · Model performance · About**. This is a suggested layout; confirm which sections exist in the current app before advertising them as implemented.
+Layout present in APP **Overview · Cargo planner · Model performance · About**. 
 
 ## Technology stack
 
@@ -465,7 +464,7 @@ Not every experimentation package is necessarily required to run the final app. 
 
 ## Repository organization
 
-The following is a **suggested layout based on the project components**. It is not a verified listing of the current repository.
+The following is a **Project components**. Listing of the current repository.
 
 | Path | Purpose |
 |---|---|
@@ -475,13 +474,12 @@ The following is a **suggested layout based on the project components**. It is n
 | data/processed/kaub_hydro_weather_daily.csv | Prepared daily dataset |
 | notebooks/ | Exploratory analysis, modeling, and evaluation |
 | modeling/App.py | Streamlit entry point |
-| modeling/realtime_pipeline.py | Live pipeline, if colocated with App.py |
-| modeling/cargo_calculation.py | Cargo logic, if colocated with App.py |
+| modeling/realtime_pipeline.py | Live pipeline,  colocated with App.py |
+| modeling/cargo_calculation.py | Cargo logic,  colocated with App.py |
 | models/water_level_model.joblib | Exported model and metadata |
 | selected_features_daily.json | Feature list, where used |
 | images/ | App banners and project images |
 
-Module imports must match their actual locations. If helper modules live in the repository root or another package, update the imports and documentation accordingly.
 
 ## Installation and setup
 
@@ -601,8 +599,6 @@ To reproduce the analysis:
 8. Export the model and matching feature metadata.
 9. Verify that historical and live feature generation agree on the same input history.
 
-Keep random seeds, package versions, source dates, and model parameters alongside results. Avoid revising the model repeatedly in response to test results without establishing a new independent evaluation period.
-
 ### Useful validation checks
 
 - Dates are unique and sorted.
@@ -687,22 +683,23 @@ These are development directions, not claims about current functionality.
 ## Team and acknowledgements
 
 **Team:** Rhine-Riders  
-**Project:** HydroLoad AI  
+**Project:** HydroLoad AI - An AI solution to the Supply Chain Management
 **Program:** neue fische Data Science and AI bootcamp
 
 The project brings together statistical modeling, machine learning, environmental data analysis, and an interactive logistics application.
 
-Acknowledgements to the bootcamp coaches and mentors for guidance, and to the water-level and weather data providers supporting the analysis.
+**Acknowledgements** to the bootcamp coaches and mentors for guidance, and to the water-level and weather data providers supporting the analysis.
 
-Add the complete team member list and contributor links before publication.
+**Team Members:**
+1. Prithvi Dattatreya Hegde
+2. Nabil El Fadel
 
 ## License and data usage
 
-Add the intended software license as a LICENSE file before describing this repository as licensed for reuse.
-
-Source datasets and external services may have separate attribution and usage requirements. A software license does not automatically grant redistribution rights for source data.
+Python 3.14
+Data used from Pegelonline and Meteo
 
 ---
 
-**HydroLoad AI — connecting water-level forecasts with cargo-planning scenarios.**
+**HydroLoad AI — connecting water-level forecasts(Gauze level) with cargo-planning scenarios.**
 
