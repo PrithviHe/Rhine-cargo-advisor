@@ -269,9 +269,11 @@ The following values summarize the reported project experiments. Small differenc
 | Model | Test MAE | Test RMSE | Test R² |
 |---|---:|---:|---:|
 | Persistence baseline | Approximately 50.8 cm | Approximately 72.5 cm | Approximately 0.583 |
-| Selected XGBoost model | Approximately 43.6 cm | Approximately 56.3 cm | Approximately 0.432 |
+| Selected XGBoost model | Approximately 43.6–48.0 cm | Approximately 56.23 cm | Approximately 0.673 |
 
-Using the reported MAE values of 50.816 cm and 43.69 cm:
+Using the reported MAE values of 50.816 cm and 47.552 cm:
+
+**MAE = (50.816 − 47.552) / 50.816 × 100 ≈ 6.4%**
 
 This represents a modest improvement over persistence. It does not establish that every forecast is better or that the estimates are sufficiently accurate for operational loading decisions.
 
