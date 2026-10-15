@@ -39,7 +39,7 @@ OUTPUT_FILE = PROCESSED_DIR / "kaub_hydro_weather_daily.csv"
 HORIZON = 7  # forecast 7 days ahead
 TEST_YEARS = 3  # last 3 years = test
 VAL_YEARS = 2  # last 2 years of train = validation
-LOW_WATER_CM = 78  # low-water mark (GlW) at Kaub
+LOW_WATER_CM = 77  # low-water alarm threshold at Kaub (cm)
 
 LAGS = [0, 1, 2, 3, 4, 5, 6, 7, 14, 21, 28]
 

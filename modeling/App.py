@@ -19,7 +19,9 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from modeling.realtime_pipeline import realtime_pipeline
+# Live and historical data both use the shared pipeline: same feature code as training
+from modeling.live_pipeline import live_pipeline
+from modeling.hydro_pipeline import build_features, load_hydro_daily
 from modeling.cargo_calculation import estimate_cargo
 MODEL_PATH = ROOT / "models" / "kaub_xgboost_04.joblib"
 DATA_PATH = ROOT / "data" / "processed" / "kaub_hydro_weather_daily.csv"
@@ -146,41 +148,17 @@ def load_model():
 # Historical feature engineering
 @st.cache_data
 def load_features(horizon):
-    """Apply the historical preprocessing used in the notebook."""
-    df = pd.read_csv(
-        DATA_PATH,
-        parse_dates=["date"],
-        index_col="date",
-    ).sort_index()
-    if df.index.has_duplicates:
+    """Historical features from the shared pipeline (same code as training and live)."""
+    # One row per calendar day, so shifts represent days
+    daily = load_hydro_daily(DATA_PATH)
+    if daily.index.has_duplicates:
         raise ValueError("Historical data contains duplicate dates.")
-    # Preserve the preprocessing from your supplied notebook code.
-    df = df.select_dtypes(include="number").round()
-    # Keep missing calendar days visible so shifts represent days.
-    df = df.asfreq("D")
-    required = [
-        "water_level_mean",
-        "precipitation_sum",
-        "temperature_mean",
-    ]
-    missing = [column for column in required if column not in df.columns]
 
-    if missing:
-        raise ValueError(f"Missing historical columns: {missing}")
-    level = df["water_level_mean"]
-    features = pd.DataFrame(index=df.index)
-    for lag in [0, 1, 2, 3, 7, 14, 28]:
-        features[f"lag_{lag}"] = level.shift(lag)
-    for days in [3, 7, 14, 30]:
-        features[f"precip_{days}d"] = (
-            df["precipitation_sum"].rolling(days).sum()
-        )
+    # Same feature function as training: lags, rain, temperature (inputs rounded first)
+    features = build_features(daily, horizon=horizon, round_inputs=True)
 
-    for days in [3, 7]:
-        features[f"temp_{days}d"] = (
-            df["temperature_mean"].rolling(days).mean()
-        )
-    features["actual"] = level.shift(-horizon)
+    # Recorded level `horizon` days later, shown next to the forecast
+    features["actual"] = features["target"]
     return features
 
 def predict_level(model, X, feature_names):
@@ -229,7 +207,7 @@ if mode == "Live forecast":
     if st.button("Update live forecast", type="primary"):
         try:
             with st.spinner("Fetching data and generating the forecast..."):
-                realtime, X_live = realtime_pipeline(feature_names)
+                realtime, X_live = live_pipeline(feature_names)
                 forecast = predict_level(
                     model,
                     X_live,

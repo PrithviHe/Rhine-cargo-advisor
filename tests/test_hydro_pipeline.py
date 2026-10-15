@@ -78,7 +78,7 @@ def test_time_split_embargo():
 
 
 def test_alarm_scores_counts_missed_alarms():
-    scores = alarm_scores([70, 70, 90, 90], [70, 90, 70, 90], low_cm=78)
+    scores = alarm_scores([70, 70, 90, 90], [70, 90, 70, 90], low_cm=77)
     assert (scores["Hits"], scores["Missed alarms"], scores["False alarms"]) == (1, 1, 1)
     assert scores["Recall"] == 0.5
 

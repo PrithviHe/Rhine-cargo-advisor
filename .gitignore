@@ -134,3 +134,6 @@ models/*
 #config file has sensitive data
 .mlflow_uri
 mlflow.db
+
+#some files are not putting to git
+00. data_import.ipynb
