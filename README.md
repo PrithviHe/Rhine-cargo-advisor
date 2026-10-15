@@ -42,7 +42,7 @@ HydroLoad AI connects a machine-learning forecast with a practical logistics que
 
 **How much cargo could a vessel carry under the expected Rhine water-level conditions at Kaub?**
 
-The project uses historical water levels(Gauze level), precipitation, and temperature to forecast the daily water level seven days ahead. A Streamlit application combines recent observations, a forecast, and vessel-specific cargo calculations in an interactive interface.
+The project uses historical water levels(Gauge level), precipitation, and temperature to forecast the daily water level seven days ahead. A Streamlit application combines recent observations, a forecast, and vessel-specific cargo calculations in an interactive interface.
 
 The cargo calculation uses the predicted gauge level together with a reference fairway depth, a clearance allowance, and vessel draft characteristics. Users can explore how different water levels and vessel assumptions affect estimated loading capacity.
 
