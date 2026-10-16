@@ -1,4 +1,4 @@
-# 🚢 HydroLoad AI - <small><i>An AI solution to the supply chain management</i></small>
+# 🚢 HydroLoad AI - <small><i>An AI Solution for Supply Chain management</i></small>
 
 ![The Rhine at Kaub](images/4_kaub.jpg)
 <sub>📷 Photo: Prithvi - taken near Kaub in the summer 2025.</sub>
