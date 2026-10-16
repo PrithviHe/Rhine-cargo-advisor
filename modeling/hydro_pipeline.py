@@ -1,4 +1,4 @@
-"""Data pipeline for notebook 06: Kaub + Bingen + discharge + weather.
+"""Data pipeline for notebook 04 (pipeline version): Kaub + Bingen + discharge + weather.
 
 Run it with:
 
@@ -151,7 +151,7 @@ def complete_days(daily):
 def build_features(daily, horizon=HORIZON, round_inputs=True, drop_incomplete=False):
     """Create lag, rain, temperature, Bingen, season features and the targets.
 
-    round_inputs=True rounds level, rain and temperature first, like notebook 04
+    round_inputs=True rounds level, rain and temperature first, like the original notebook 04
     and realtime_pipeline.py do.
 
     Only water_level_mean, precipitation_sum and temperature_mean are required.
