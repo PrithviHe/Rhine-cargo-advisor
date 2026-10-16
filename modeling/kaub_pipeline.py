@@ -1,6 +1,6 @@
 """Training pipeline for the notebook-04 XGBoost model.
 
-Does the same steps as the original `notebooks/archive/04_eda_and_multivariate_main.ipynb`, but in one place:
+Does the same steps as the original `archive/notebooks/04_eda_and_multivariate_main.ipynb`, but in one place:
 
     1. load the daily data
     2. create features and the 7-day-ahead target

@@ -68,7 +68,7 @@ and `tests/test_live_pipeline.py` can prove the old and new live features are id
 |---|---|
 | [`cargo_calculation.py`](../modeling/cargo_calculation.py) | `estimate_cargo()`: forecast level → water depth, available draft, vessel cargo, truckloads |
 | [`App.py`](../modeling/App.py) | Streamlit dashboard; loads the model and pipelines directly (historical: `hydro_pipeline`, live: `live_pipeline`) |
-| [`archive/`](../archive) | unused files kept for reference: old app version, coffee-template code and data, old screenshots and models |
+| [`archive/`](../archive) | unused files kept for reference: original notebooks 04 and 05, old app version, coffee-template code and data, old screenshots and models |
 
 ---
 
@@ -205,7 +205,7 @@ live_pipeline(feature_names)
 | Notebook 05 (pipeline) | step by step, plus a check that live features = training features |
 | `App.py` | "Update live forecast" button → `live_pipeline()` |
 
-> The older version, `notebooks/archive/05_Real_time_data.ipynb`, defines its own copy of every function instead of using the pipeline.
+> The older version, `archive/notebooks/05_Real_time_data.ipynb`, defines its own copy of every function instead of using the pipeline.
 
 ---
 
@@ -270,8 +270,8 @@ Run notebooks from the `notebooks/` folder.
 | `01_data.ipynb` | No | data import and first exploration; ⚠️ its `to_csv` cells overwrite files in `data/processed/` |
 | `02_eda.ipynb` | No | daily EDA |
 | `03_baseline_model.ipynb` | No | persistence vs linear AR baseline |
-| `archive/04_eda_and_multivariate_main.ipynb` | No | **archived**: original multivariate analysis, everything written in the cells (replaced by `04_eda_and_multivariate_pipeline`) |
-| `archive/05_Real_time_data.ipynb` | No | **archived**: original live forecast, own copy of the functions (replaced by `05_Real_time_pipeline`) |
+| `../archive/notebooks/04_eda_and_multivariate_main.ipynb` | No | **archived**: original multivariate analysis, everything written in the cells (replaced by `04_eda_and_multivariate_pipeline`) |
+| `../archive/notebooks/05_Real_time_data.ipynb` | No | **archived**: original live forecast, own copy of the functions (replaced by `05_Real_time_pipeline`) |
 | `04_eda_and_multivariate_pipeline.ipynb` | **Yes** | the original notebook 04 rebuilt with `hydro_pipeline` + `kaub_pipeline`; **saves the model the apps use** |
 | `05_Real_time_pipeline.ipynb` | **Yes** | live forecast with `live_pipeline` |
 
