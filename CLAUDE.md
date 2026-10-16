@@ -158,8 +158,9 @@ Shell output on this machine is cp1252 — set `PYTHONIOENCODING=utf-8` when pri
 with emoji/arrows.
 
 Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>` — never `pip install`.
-`mlflow`, `tabicl`, `parsenvy` and `statsmodels` are still declared but unused by current code
-(MLflow config `modeling/config.py` was removed); confirm with the user before removing them.
+`pyproject.toml` lists exactly what the code imports (runtime: pandas, numpy, scikit-learn, xgboost,
+lightgbm, streamlit, plotly, matplotlib, requests, joblib, pillow; dev: jupyterlab, seaborn, pytest,
+black, nbdime). MLflow, statsmodels, tabicl, parsenvy and testbook were removed as unused.
 
 ## Notebooks
 
