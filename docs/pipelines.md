@@ -68,7 +68,7 @@ and `tests/test_live_pipeline.py` can prove the old and new live features are id
 |---|---|
 | [`cargo_calculation.py`](../modeling/cargo_calculation.py) | `estimate_cargo()`: forecast level → water depth, available draft, vessel cargo, truckloads |
 | [`App.py`](../modeling/App.py) | Streamlit dashboard; loads the model and pipelines directly (historical: `hydro_pipeline`, live: `live_pipeline`) |
-| `App.old.py`, `predict.py`, `feature_engineering.py` | Old app version and coffee-template code — not used |
+| [`archive/`](../archive) | unused files kept for reference: old app version, coffee-template code and data, old screenshots and models |
 
 ---
 

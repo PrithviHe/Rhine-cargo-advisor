@@ -137,3 +137,5 @@ mlflow.db
 
 #some files are not putting to git
 00. data_import.ipynb
+# macOS system files
+.DS_Store
