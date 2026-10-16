@@ -16,7 +16,7 @@ flowchart LR
         WX[(Open-Meteo<br/>weather archive)] --> DP
         DP --> HP[hydro_pipeline.py<br/>daily table +<br/>build_features]
         HP --> KP[kaub_pipeline.py<br/>train · evaluate · save]
-        KP --> NB6[notebook 06<br/>trains and saves<br/>the model]
+        KP --> NB6[notebook 04<br/>trains and saves<br/>the model]
     end
 
     NB6 --> MODEL[(models/<br/>kaub_xgboost_04.joblib<br/>XGBoost · 13 features)]
@@ -36,7 +36,7 @@ flowchart LR
 
 | Path | Steps |
 |---|---|
-| **Training** | raw files + weather archive → `data_pipeline` (UTC fix) → `hydro_pipeline` (daily table, `build_features`) → `kaub_pipeline` (train, evaluate) → **notebook 06** saves `models/kaub_xgboost_04.joblib` |
+| **Training** | raw files + weather archive → `data_pipeline` (UTC fix) → `hydro_pipeline` (daily table, `build_features`) → `kaub_pipeline` (train, evaluate) → **notebook 04 (pipeline)** saves `models/kaub_xgboost_04.joblib` |
 | **Historical forecast** | `App.py` → `hydro_pipeline.load_hydro_daily()` + `build_features()` → saved model |
 | **Real-time forecast** | `App.py` → `live_pipeline`: `realtime_pipeline` fetches Pegelonline + Open-Meteo → `build_features()` → latest day → saved model |
 
@@ -53,13 +53,13 @@ live data from Pegelonline and the Open-Meteo forecast API.
 | File | Purpose | Main functions | Used by |
 |---|---|---|---|
 | [`data_pipeline.py`](../modeling/data_pipeline.py) | Reads the raw Kaub gauge record and the hourly weather archive, converts both to **UTC**, joins them on the real instant. Run on its own it also writes the Kaub-only processed files, including the weather cache | `load_water_utc()`, `fetch_weather_utc()`, `load_weather_utc_from_cache()`, `build()` | `hydro_pipeline.py`, `make data`, notebooks 02 and 03 (through its output files) |
-| [`hydro_pipeline.py`](../modeling/hydro_pipeline.py) | Builds the **historical daily table** (Kaub + Bingen + discharge + weather) and holds the **shared feature, split and evaluation code** | `build_hydro_daily()`, `load_hydro_daily()`, `build_features()`, `time_split()`, `metrics()`, `regime_table()`, `alarm_scores()` | `kaub_pipeline`, `live_pipeline`, `App.py`, notebooks 06, 07 |
-| [`kaub_pipeline.py`](../modeling/kaub_pipeline.py) | **Training**: the notebook-04 models — train, evaluate, save, load, predict | `load_data()`, `make_features()`, `make_models()`, `split_data()`, `train_model_groups()`, `refit_and_test()`, `train()`, `save_model()`, `load_model()`, `predict()` | notebook 06, notebook 07 |
+| [`hydro_pipeline.py`](../modeling/hydro_pipeline.py) | Builds the **historical daily table** (Kaub + Bingen + discharge + weather) and holds the **shared feature, split and evaluation code** | `build_hydro_daily()`, `load_hydro_daily()`, `build_features()`, `time_split()`, `metrics()`, `regime_table()`, `alarm_scores()` | `kaub_pipeline`, `live_pipeline`, `App.py`, notebooks 04, 05 |
+| [`kaub_pipeline.py`](../modeling/kaub_pipeline.py) | **Training**: the models from the original notebook 04 — train, evaluate, save, load, predict | `load_data()`, `make_features()`, `make_models()`, `split_data()`, `train_model_groups()`, `refit_and_test()`, `train()`, `save_model()`, `load_model()`, `predict()` | notebook 04, notebook 05 |
 | [`realtime_pipeline.py`](../modeling/realtime_pipeline.py) | **Live fetching**: last 30 days of water level (Pegelonline) and 35 days of daily weather (Open-Meteo forecast API), cleaned and merged | `fetch_water_data()`, `clean_water_data()`, `create_daily_water()`, `fetch_weather_data()`, `clean_weather_data()`, `merge_live_data()`, `validate_live_data()` | `live_pipeline.py` |
-| [`live_pipeline.py`](../modeling/live_pipeline.py) | **Live model inputs**: fetching from `realtime_pipeline`, features from `hydro_pipeline` | `fetch_live_daily()`, `create_live_features()`, `latest_inputs()`, `live_pipeline()` | `App.py`, notebook 07 |
+| [`live_pipeline.py`](../modeling/live_pipeline.py) | **Live model inputs**: fetching from `realtime_pipeline`, features from `hydro_pipeline` | `fetch_live_daily()`, `create_live_features()`, `latest_inputs()`, `live_pipeline()` | `App.py`, notebook 05 |
 
 `realtime_pipeline.py` still contains its own `create_live_features()` and `realtime_pipeline()`
-(the original feature code). `App.py` no longer calls them; they are kept so notebook 07
+(the original feature code). `App.py` no longer calls them; they are kept so notebook 05
 and `tests/test_live_pipeline.py` can prove the old and new live features are identical.
 
 ### Supporting files
@@ -83,7 +83,7 @@ In `hydro_pipeline.py`:
 | `VAL_YEARS` | `2` | last 2 years of the training data = validation set |
 | `LOW_WATER_CM` | `77` | low-water alarm when the forecast is **below** 77 cm |
 
-`LOW_WATER_CM` is the default for the pipelines and notebooks 06–07. The Streamlit app has its own
+`LOW_WATER_CM` is the default for the pipelines and notebooks 04–05. The Streamlit app has its own
 **"Low-water threshold"** setting in the sidebar (default 77 cm) that the user can change.
 
 **Saved model:** `models/kaub_xgboost_04.joblib` (`kaub_pipeline.MODEL_PATH`), a dictionary with
@@ -142,10 +142,10 @@ There are **two ways**, and they save **different models to the same file**:
 
 | Way | Model trained on | Validation MAE | Test MAE |
 |---|---|---|---|
-| **Notebook 06**, section "Save Model for streamlit" | `train_fit` (2000 → Aug 2021) | 43.5 cm | 47.6 cm |
+| **Notebook 04 (pipeline)**, section "Save Model for streamlit" | `train_fit` (2000 → Aug 2021) | 43.5 cm | 47.6 cm |
 | `uv run python -m modeling.kaub_pipeline` | `train` (2000 → Aug 2023) | 43.5 cm *(checked before refitting)* | 47.2 cm |
 
-**The model currently saved and used by the apps is the notebook 06 version** (XGBoost on
+**The model currently saved and used by the app is the notebook 04 (pipeline) version** (XGBoost on
 `train_fit`). Running `modeling.kaub_pipeline` replaces it with the version trained up to 2023;
 undo with `git restore models/kaub_xgboost_04.joblib`.
 
@@ -167,7 +167,7 @@ Split (with 7-day gaps so no target overlaps the next period):
 
 | Where | How |
 |---|---|
-| Notebook 06 | `kp.predict(kp.load_model(), kp.load_data())` |
+| Notebook 04 (pipeline) | `kp.predict(kp.load_model(), kp.load_data())` |
 | `App.py` | "Historical forecast" → `load_features()` → `hydro_pipeline.load_hydro_daily()` + `build_features()` |
 
 Dates before August 2021 were part of the saved model's training data, so historical forecasts for
@@ -202,10 +202,10 @@ live_pipeline(feature_names)
 
 | Where | How |
 |---|---|
-| Notebook 07 | step by step, plus a check that live features = training features |
+| Notebook 05 (pipeline) | step by step, plus a check that live features = training features |
 | `App.py` | "Update live forecast" button → `live_pipeline()` |
 
-> Notebook 05 is the older version: it defines its own copy of every function instead of using the pipeline.
+> The older version, `notebooks/archive/05_Real_time_data.ipynb`, defines its own copy of every function instead of using the pipeline.
 
 ---
 
@@ -215,16 +215,16 @@ live_pipeline(feature_names)
 
 | Use | Function | Calls `build_features()` |
 |---|---|---|
-| Training (notebook 06, `kaub_pipeline`) | `kaub_pipeline.make_features()` | ✅ |
+| Training (notebook 04, `kaub_pipeline`) | `kaub_pipeline.make_features()` | ✅ |
 | Historical forecast (`App.py`) | `load_features()` | ✅ |
-| Live forecast (`App.py`, notebook 07) | `live_pipeline.create_live_features()` | ✅ |
+| Live forecast (`App.py`, notebook 05) | `live_pipeline.create_live_features()` | ✅ |
 
 This was checked:
 
-- Retraining the XGBoost exactly like notebook 06 with today's `build_features()` gives
+- Retraining the XGBoost exactly like notebook 04 (pipeline) with today's `build_features()` gives
   **identical predictions** to the saved model on all 9,712 forecastable days.
 - On the same input, live features = training features = the original `realtime_pipeline`
-  features (`tests/test_live_pipeline.py`, notebook 07).
+  features (`tests/test_live_pipeline.py`, notebook 05).
 
 **What differs is the data before the features**, because past and live data come from different sources:
 
@@ -270,10 +270,10 @@ Run notebooks from the `notebooks/` folder.
 | `01_data.ipynb` | No | data import and first exploration; ⚠️ its `to_csv` cells overwrite files in `data/processed/` |
 | `02_eda.ipynb` | No | daily EDA |
 | `03_baseline_model.ipynb` | No | persistence vs linear AR baseline |
-| `04_eda_and_multivariate_main.ipynb` | No | original multivariate analysis, everything written in the cells |
-| `05_Real_time_data.ipynb` | No | original live forecast, own copy of the functions |
-| `06_eda_and_multivariate_pipeline.ipynb` | **Yes** | notebook 04 rebuilt with `hydro_pipeline` + `kaub_pipeline`; **saves the model the apps use** |
-| `07_Real_time_pipeline.ipynb` | **Yes** | live forecast with `live_pipeline` |
+| `archive/04_eda_and_multivariate_main.ipynb` | No | **archived**: original multivariate analysis, everything written in the cells (replaced by `04_eda_and_multivariate_pipeline`) |
+| `archive/05_Real_time_data.ipynb` | No | **archived**: original live forecast, own copy of the functions (replaced by `05_Real_time_pipeline`) |
+| `04_eda_and_multivariate_pipeline.ipynb` | **Yes** | the original notebook 04 rebuilt with `hydro_pipeline` + `kaub_pipeline`; **saves the model the apps use** |
+| `05_Real_time_pipeline.ipynb` | **Yes** | live forecast with `live_pipeline` |
 
 ---
 

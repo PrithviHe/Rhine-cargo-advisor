@@ -1,6 +1,6 @@
 """Training pipeline for the notebook-04 XGBoost model.
 
-Does the same steps as `04_eda_and_multivariate copy.ipynb`, but in one place:
+Does the same steps as the original `notebooks/archive/04_eda_and_multivariate_main.ipynb`, but in one place:
 
     1. load the daily data
     2. create features and the 7-day-ahead target
@@ -51,7 +51,7 @@ def load_data():
 
 
 def make_features(daily):
-    """Features + target, exactly like notebook 04 (inputs rounded first)."""
+    """Features + target, exactly like the original notebook 04 (inputs rounded first)."""
     return hp.build_features(daily, horizon=HORIZON, round_inputs=True)
 
 
@@ -59,7 +59,7 @@ def make_features(daily):
 # Step 3 + 4: train and evaluate
 # ---------------------------------------------------------------
 def make_model():
-    """The XGBoost settings from notebook 04."""
+    """The XGBoost settings from the original notebook 04."""
     return XGBRegressor(
         n_estimators=500,
         learning_rate=0.03,
@@ -73,7 +73,7 @@ def make_model():
 
 
 def make_models():
-    """All models from notebook 04, with the same settings."""
+    """All models from the original notebook 04, with the same settings."""
     return {
         "Linear regression": LinearRegression(),
         "LightGBM": LGBMRegressor(
