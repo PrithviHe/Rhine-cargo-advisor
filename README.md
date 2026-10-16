@@ -1,6 +1,7 @@
-# 🚢 HydroLoad AI
+# 🚢 HydroLoad AI - <small><i>An AI solution to the supply chain management</i></small>
 
-*An AI solution for supply chain management on the Rhine*
+![The Rhine at Kaub](images/4_kaub.jpg)
+<sub>📷 Photo: Prithvi - taken near Kaub in the summer 2025.</sub>
 
 ## Rhine water-level forecasting using ML algorithm and cargo planning
 
@@ -75,6 +76,35 @@ HydroLoad AI aims to make the relationship between expected river conditions and
 6. Translate forecast water levels into approximate cargo capacity.
 7. Display recent observations, predictions, and cargo scenarios in Streamlit.
 8. Communicate assumptions, uncertainty, and limitations clearly.
+
+## HydroLoad AI - Project Flow
+
+## 1. Overview
+
+```mermaid
+flowchart LR
+    subgraph HIST["Historical data and training"]
+        RAW[(data/raw<br/>Kaub, Bingen,<br/>discharge)] --> DP[data_pipeline.py<br/>UTC time fix]
+        WX[(Open-Meteo<br/>weather archive)] --> DP
+        DP --> HP[hydro_pipeline.py<br/>daily table +<br/>build_features]
+        HP --> KP[kaub_pipeline.py<br/>train · evaluate · save]
+        KP --> NB6[notebook 04<br/>trains and saves<br/>the model]
+    end
+
+    NB6 --> MODEL[(models/<br/>kaub_xgboost_04.joblib<br/>XGBoost · 13 features)]
+
+    subgraph LIVE["Real-time data"]
+        PEG[(Pegelonline<br/>Kaub gauge,<br/>last 30 days)] --> RP[realtime_pipeline.py<br/>fetch + clean]
+        OM[(Open-Meteo<br/>forecast API,<br/>last 35 days)] --> RP
+        RP --> LP[live_pipeline.py<br/>live model inputs]
+    end
+
+    HP -- same build_features --> LP
+
+    MODEL --> APP[App.py<br/>Streamlit]
+    HP -- historical forecast --> APP
+    LP -- live forecast --> APP
+```
 
 ## Main capabilities
 
@@ -721,5 +751,5 @@ MIT license
 
 ---
 
-**HydroLoad AI — connecting water-level forecasts(Gauze level) with cargo-planning scenarios.**
+**HydroLoad AI — connecting water-level forecasts(Gauge level) with cargo-planning scenarios.**
 
