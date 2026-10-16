@@ -77,13 +77,8 @@ HydroLoad AI aims to make the relationship between expected river conditions and
 7. Display recent observations, predictions, and cargo scenarios in Streamlit.
 8. Communicate assumptions, uncertainty, and limitations clearly.
 
-## HydroLoad AI - Project Flow
-
-![HydroLoad-AI flow: 01 learn from history, 02 forecast the river, 03 plan the cargo, decision dashboard](images/8_hydroload_flow.png)
-
-## 1. Overview
-
-![HydroLoad-AI project flow: historical data and training, real-time data, application](images/7_pipeline_overview.png)
+## Project Flow
+![HydroLoad-AI project flow: …](images/7_hydroload_flow.png)
 
 ## Main capabilities
 
