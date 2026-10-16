@@ -67,8 +67,7 @@ uv sync --frozen         # install exactly what uv.lock says, never re-resolve (
 
 > There is no `pyenv local`, no `python -m venv`, no `pip install`. The old
 > `requirements.txt`, `requirements_dev.txt` and `environment.yml` have been deleted —
-> `pyproject.toml` plus `uv.lock` replace all three. (`make setup` still works; it now
-> just calls `uv sync --all-groups`.)
+> `pyproject.toml` plus `uv.lock` replace all three.
 
 ---
 
@@ -96,8 +95,16 @@ python -m modeling.train
 
 but `uv run` is recommended — it's the only form that guarantees the env matches `uv.lock`.
 
-The `Makefile` wraps the common ones: `make setup`, `make train`, `make predict`, `make lab`,
-`make mlflow`, `make test`, `make format`.
+Common commands:
+
+```bash
+uv sync --all-groups                          # install everything
+uv run python -m modeling.hydro_pipeline      # rebuild the daily data table
+uv run streamlit run modeling/App.py          # start the app
+uv run python -m jupyterlab                   # notebooks
+uv run python -m pytest                       # tests
+uv run black .                                # format the code
+```
 
 ---
 
