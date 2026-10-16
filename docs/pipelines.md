@@ -52,7 +52,7 @@ live data from Pegelonline and the Open-Meteo forecast API.
 
 | File | Purpose | Main functions | Used by |
 |---|---|---|---|
-| [`data_pipeline.py`](../modeling/data_pipeline.py) | Reads the raw Kaub gauge record and the hourly weather archive, converts both to **UTC**, joins them on the real instant. Run on its own it also writes the Kaub-only processed files, including the weather cache | `load_water_utc()`, `fetch_weather_utc()`, `load_weather_utc_from_cache()`, `build()` | `hydro_pipeline.py`, `make data`, notebooks 02 and 03 (through its output files) |
+| [`data_pipeline.py`](../modeling/data_pipeline.py) | Reads the raw Kaub gauge record and the hourly weather archive, converts both to **UTC**, joins them on the real instant. Run on its own it also writes the Kaub-only processed files, including the weather cache | `load_water_utc()`, `fetch_weather_utc()`, `load_weather_utc_from_cache()`, `build()` | `hydro_pipeline.py`, notebooks 02 and 03 (through its output files) |
 | [`hydro_pipeline.py`](../modeling/hydro_pipeline.py) | Builds the **historical daily table** (Kaub + Bingen + discharge + weather) and holds the **shared feature, split and evaluation code** | `build_hydro_daily()`, `load_hydro_daily()`, `build_features()`, `time_split()`, `metrics()`, `regime_table()`, `alarm_scores()` | `kaub_pipeline`, `live_pipeline`, `App.py`, notebooks 04, 05 |
 | [`kaub_pipeline.py`](../modeling/kaub_pipeline.py) | **Training**: the models from the original notebook 04 — train, evaluate, save, load, predict | `load_data()`, `make_features()`, `make_models()`, `split_data()`, `train_model_groups()`, `refit_and_test()`, `train()`, `save_model()`, `load_model()`, `predict()` | notebook 04, notebook 05 |
 | [`realtime_pipeline.py`](../modeling/realtime_pipeline.py) | **Live fetching**: last 30 days of water level (Pegelonline) and 35 days of daily weather (Open-Meteo forecast API), cleaned and merged | `fetch_water_data()`, `clean_water_data()`, `create_daily_water()`, `fetch_weather_data()`, `clean_weather_data()`, `merge_live_data()`, `validate_live_data()` | `live_pipeline.py` |
@@ -133,7 +133,7 @@ data/raw/*.csv ──► data_pipeline (UTC fix) ──► hydro_pipeline.build_
 ```
 
 Weather is read from the cached `data/processed/kaub_weather_hourly.csv`. That cache is written by
-`uv run python -m modeling.data_pipeline` (`make data`), which **re-downloads 26 years of weather**;
+`uv run python -m modeling.data_pipeline`, which **re-downloads 26 years of weather**;
 add `--offline` to reuse the existing cache instead.
 
 ### Step 2 — train, evaluate and save the model
@@ -245,7 +245,7 @@ what the archive (used for training) would report for the same day.
 ## 8. Streamlit app
 
 ```bash
-uv run streamlit run modeling/App.py          # http://localhost:8501   (or: make app)
+uv run streamlit run modeling/App.py          # http://localhost:8501
 ```
 
 | Sidebar setting | What it does |
