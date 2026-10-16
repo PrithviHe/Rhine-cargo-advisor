@@ -2,166 +2,185 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project state: template vs. actual project
+## Project
 
-This repo was forked from the neuefische `ds-modeling-pipeline` template. **`modeling/train.py`,
-`modeling/predict.py`, `modeling/feature_engineering.py`, `notebooks/EDA-and-modeling.ipynb`,
-`notebooks/Data_import.ipynb` and `README.md` are still template code about the coffee quality
-dataset** — altitude feature engineering, a linear regression on `quality_score`. None of it
-relates to HydroLoad-AI, and `make train` / `make predict` still run the coffee pipeline.
+**HydroLoad-AI**: forecast the Rhine water level at the **Kaub** gauge 7 days ahead and turn it
+into a barge cargo estimate. The operational question: *will the level be below the low-water
+threshold (77 cm) in 7 days?* The deliverable is a Streamlit app (`modeling/App.py`).
 
-The actual project is water level forecasting for the Rhine gauge at **Kaub**, for barge load
-planning: given today, will the level be below the loading threshold in N days?
+The repo started from the neuefische `ds-modeling-pipeline` coffee template. All template code,
+data and screenshots have been moved to `archive/`; nothing outside
+`archive/` refers to them. Don't revive them. Restrict UI work to **Streamlit** — the user removed
+a FastAPI experiment on purpose.
 
-The real work lives in `modeling/data_pipeline.py`, `modeling/config.py`, `tests/`, and
-notebooks `01.`–`04.`. Treat the coffee code as a scaffold to replace, not something to stay
-consistent with. Confirm with the user before deleting template files.
+The full, user-facing explanation of the pipelines is [`docs/pipelines.md`](docs/pipelines.md).
+Keep it in sync when pipelines, notebooks or the app change.
+
+## Layout
+
+```
+modeling/   data_pipeline.py  hydro_pipeline.py  kaub_pipeline.py
+            realtime_pipeline.py  live_pipeline.py  cargo_calculation.py  App.py
+notebooks/  01_data  02_eda  03_baseline_model
+            04_eda_and_multivariate_pipeline  05_Real_time_pipeline
+models/     kaub_xgboost_04.joblib        ← the model the app loads (committed)
+data/raw/   Kaub, Bingen, discharge (15-min)   data/processed/   derived tables
+docs/       pipelines.md, Final_Presentation_HydroLoadAI_final.pdf
+tests/      test_data_pipeline.py  test_hydro_pipeline.py  test_live_pipeline.py
+archive/    original notebooks 04/05 (archive/notebooks/), unused template code/data/images/old models
+```
+
+## Pipelines (how they depend on each other)
+
+```
+data_pipeline ─► hydro_pipeline ─┬─► kaub_pipeline ─► notebook 04 saves models/kaub_xgboost_04.joblib
+                                  └─► live_pipeline ◄── realtime_pipeline (fetch + clean only)
+```
+
+- **`data_pipeline.py`** — raw Kaub gauge + Open-Meteo archive → UTC → joined. `build()` writes the
+  Kaub-only processed files and the weather cache `data/processed/kaub_weather_hourly.csv`.
+  Running it without `--offline` **re-downloads 26 years of weather**.
+- **`hydro_pipeline.py`** — the historical daily table (Kaub + Bingen + discharge + weather) and
+  the **single feature function `build_features()`**, plus `time_split()`, `metrics()`,
+  `regime_table()`, `alarm_scores()` and the settings `HORIZON=7`, `TEST_YEARS=3`, `VAL_YEARS=2`,
+  `LOW_WATER_CM=77`, `FEATURE_GROUPS`, `EXTENDED_FEATURES`.
+- **`kaub_pipeline.py`** — the multivariate models (linear, LightGBM, random forest, XGBoost,
+  polynomial ridge), `split_data()`, `train_model_groups()`, `refit_and_test()`, `save_model()`,
+  `load_model()`, `predict()`. `MODEL_PATH = models/kaub_xgboost_04.joblib`.
+- **`realtime_pipeline.py`** — fetches the last 30 days from Pegelonline and 35 days of daily
+  weather from the Open-Meteo **forecast** API. Its own `create_live_features()` /
+  `realtime_pipeline()` are legacy, kept only so tests and notebook 05 can prove the new path
+  matches them. Don't call them from new code.
+- **`live_pipeline.py`** — `live_pipeline(feature_names)` = realtime fetch → `build_features()` →
+  `latest_inputs()` (stops with a clear error if any needed history is missing).
+
+**The one rule: `hydro_pipeline.build_features()` is the only feature code.** Training
+(`kp.make_features`), historical forecasts (`App.py` `load_features()`) and live forecasts
+(`live_pipeline.create_live_features`) all call it. Never add a second copy of feature logic.
+`build_features` creates Bingen/discharge/snow/evaporation features only when those columns exist,
+so it also works on live data (which has only level, rain, temperature). It requires a complete
+daily `DatetimeIndex` (`load_hydro_daily()` / `asfreq("D")`) so `shift(k)` means k calendar days.
+
+## The saved model
+
+`models/kaub_xgboost_04.joblib` = `{"model", "features", "horizon"}`: XGBoost (500 trees,
+lr 0.03, depth 4) on the 13 features of group *"Kaub + precipitation + temperature"* (`lag_0/1/2/3/7/14/28`,
+`precip_3d/7d/14d/30d`, `temp_3d/7d`), trained on **`train_fit` (2000-01-30 → 2021-08-18)**.
+It is written by notebook 04's "Save Model for streamlit" cell. Retraining that way with the
+current `build_features()` reproduces it exactly (deterministic).
+
+**Trap:** `uv run python -m modeling.kaub_pipeline` (`run()`) saves a *different* model — refit on
+`train` up to 2023 — to the **same path**. Don't run it unless the user wants to replace the app's
+model; if it happens, `git restore models/kaub_xgboost_04.joblib`.
+
+Split (7-day embargo on both cuts, asserted in `time_split`): train_fit → 2021-08-18,
+validation 2021-08-26 → 2023-08-25, test 2023-09-02 → 2026-08-25.
+
+## Streamlit app (`modeling/App.py`)
+
+Loads the model above; **historical mode** → `load_hydro_daily()` + `build_features()`;
+**live mode** → `live_pipeline()`; cargo via `cargo_calculation.estimate_cargo()` (simplified
+linear draft–payload rule with example vessel defaults). The low-water threshold is a sidebar input
+(default 77), not `LOW_WATER_CM`. Banner image: `images/4_kaub.jpg`. Streamlit warns that
+`use_container_width` is deprecated in two calls; replacing it with `width="stretch"` is safe.
 
 ## Data
 
-`data/raw/` — all three files are semicolon-separated, `timestamp;value`, `timestamp` format
-`YYYY-MM-DD HH:MM`, 15-minute grid from 2000-01-01 01:00. **Read them with
-`pd.read_csv(..., sep=";")`; the default comma separator silently yields one column.**
+`data/raw/` — semicolon-separated `timestamp;value`, `YYYY-MM-DD HH:MM`, 15-min grid.
+**Read with `pd.read_csv(..., sep=";")`**; the default comma silently yields one column.
+`water_level_15min_kaub.csv` (to 2026-09-01), `bingen_water_level15_min.csv` and
+`kaub_water_discharge.csv` (to 2026-09-18, discharge unit unrecorded).
 
-| file | rows | value | used by |
-|---|---|---|---|
-| `water_level_15min_kaub.csv` | 935,128 | level in cm, to 2026-09-01 | the pipeline, everything |
-| `bingen_water_level15_min.csv` | 936,714 | level in cm, to 2026-09-18 | nothing yet |
-| `kaub_water_discharge.csv` | 936,713 | discharge, to 2026-09-18 (unit not recorded anywhere; values ~3400 in Jan 2000) | nothing yet |
+`data/processed/`:
+- `kaub_hydro_weather_daily.csv` — written by `hydro_pipeline` (timezone-correct, has
+  `hours_available` and `hours_expected`). **This is what the app and pipelines use.**
+- `kaub_weather_hourly.csv`, `kaub_water_level_hourly.csv`, `kaub_water_weather_hourly.csv`,
+  `kaub_water_weather_daily.csv` — currently the **legacy notebook-01 output** (`date,time,value`,
+  every day exactly 24 h, label-joined). Notebooks 02 and 03 read the daily one, so they still
+  carry the timezone defect below. `load_weather_utc_from_cache()` handles this legacy cache via a
+  fixed UTC+2 offset. Notebook 01's `to_csv` cells are **active** and overwrite these files.
 
-Bingen and discharge are committed but referenced nowhere — they are staged for the "upstream
-gauge" next step in notebook 04's conclusions.
-
-### `data/processed/` on disk is NOT what `data_pipeline.py` produces
-
-The four committed processed files are the **legacy, timezone-naive output of the original
-notebook 01**: the hourly files carry `date,time,value` and the daily file has no
-`hours_available` / `hours_expected` columns. Every hourly local day in them is exactly 24 hours
-long, which is the tell — the corrected pipeline yields 23- and 25-hour days at DST boundaries.
-
-So notebooks 02, 03 and 04 all currently read data that still has the label-join defect described
-below. Running `make data` fixes that but **changes the schema**: `value` becomes
-`water_level_mean` / `_min` / `_max`, a `timestamp_utc` column appears, the daily file gains
-`hours_available` and `hours_expected`, and the DST days start showing up as "incomplete" in any
-check that compares against a hard-coded 24 (notebooks 02 and 04 both do this today and would
-start dropping ~53 extra days). Expect to update those notebooks in the same change.
-
-`modeling/data_pipeline.py` is the only thing that should write `data/processed/`. Run it with
-`make data`, or `uv run python -m modeling.data_pipeline --offline` to reuse the cached weather
-CSV instead of re-fetching 26 years of hourly weather from Open-Meteo (lat 50.08, lon 7.76).
-Notebook 01's `to_csv` calls are commented out on purpose so re-running it cannot clobber files.
+`.gitignore` does **not** exclude data — all CSVs under `data/` are tracked (~100 MB). Regenerating
+data shows up as large diffs.
 
 ## Timezones (the subtle bug in this dataset)
 
-The two sources are on different clocks, and joining on their printed timestamps is wrong:
+- **Gauge records**: Europe/Berlin wall-clock, DST-aware — the 02:00 hour is missing on spring-forward
+  dates and repeated on fall-back dates.
+- **Open-Meteo archive**: one fixed offset for the whole response (`utc_offset_seconds`, 7200 for the
+  2000→2026 request), even with `timezone=Europe/Berlin`; it returns hours that don't exist locally.
+  The offset depends on the requested range — read it from the response, never hard-code it when fetching.
 
-- **Gauge record**: Europe/Berlin wall-clock, DST-aware. The 02:00 hour is absent on all 27
-  spring-forward dates and duplicated on all 26 fall-back dates (104 duplicated stamps).
-- **Open-Meteo archive**: a **flat fixed-offset grid, not local time**, even though the request
-  asks for `timezone=Europe/Berlin`. It applies one offset to the whole response and reports it
-  as `utc_offset_seconds` — 7200 (UTC+2) for the 2000-01-01 → 2026-09-01 range — and happily
-  returns hours like `2024-03-31T02:00` that do not exist in Berlin. **That offset depends on the
-  requested date range, so never hard-code it when fetching; read it from the response.**
+Joining on printed labels misaligns water and weather by an hour for ~5 months a year and averages the
+repeated autumn hour. The pipelines carry both sides to UTC before joining and aggregate to
+**Berlin calendar days** (23/25-hour DST days; compare completeness to `hours_expected`, never to 24).
+`tests/test_data_pipeline.py` pins this at the instant level — run the tests before touching joins.
 
-Joining on labels pairs water with the wrong hour of weather for the ~5 winter months on CET, and
-averages the two passes of the repeated autumn hour into one. `data_pipeline.py` carries both
-sides to UTC before joining. Daily aggregation is over **Europe/Berlin calendar days**, so two
-days a year are 23 or 25 hours long — the daily file records `hours_expected` next to
-`hours_available`, and completeness must be checked against that, never against a hard-coded 24.
+Live data is aggregated differently (hourly in Berlin time, incomplete days → NaN) and its weather
+comes from the forecast API, not the archive — feature *code* is identical, input values can differ slightly.
 
-`tests/test_data_pipeline.py` pins all of this at the instant level (9 tests, all passing); run
-`make test` before touching the joins. The daily aggregates are forgiving enough to hide a
-one-hour misalignment, which is why the tests assert on UTC instants rather than daily means.
+## Modelling results that shape further work
 
-## The notebook chain
+At a 7-day horizon persistence (`lag_0`) is hard to beat, especially at low water: the saved XGBoost
+has test MAE 47.2–47.6 cm vs 50.8 for persistence overall, but ~36 cm vs ~24 cm at low water, with a
+strong positive bias (promises water that isn't there — the dangerous direction). An experimental
+variant predicting the 7-day *change* with Huber loss and extra features (`EXTENDED_FEATURES`)
+cut low-water MAE to ~22.5 cm and raised alarm recall to 82 %, but it needs 60/90-day rain, snow and
+evaporation that the live pipeline does not fetch, so it is not deployed.
 
-All of `01.`–`04.` use `../data/...` and expect to **run from `notebooks/`**. (The template
-`Data_import.ipynb` uses repo-root-relative paths; `EDA-and-modeling.ipynb` uses
-`sys.path.append("..")` and `../.mlflow_uri`.)
+**Always report a low-water row and a per-regime table (`regime_table`) and score the alarm decision
+(`alarm_scores`, recall first)** — aggregate MAE hides the low-water behaviour.
 
-- **`01. data_import.ipynb`** — the exploration that produced `data_pipeline.py`. Writes nothing.
-- **`02. eda.ipynb`** — daily EDA; found the 30-day cumulative precipitation window (r = 0.53)
-  that notebook 04's features are built on. Its header still describes the *uncorrected* data
-  ("flat UTC+1 grid", "seven months a year") — that text predates `data_pipeline.py` and is wrong
-  in the details; trust the module and its tests over the notebook prose.
-- **`03. baseline_model.ipynb`** — the only MLflow-logged notebook. Imports its constants from
-  `modeling.config` (via `sys.path.append("..")`) and logs one run per model through a
-  `run_baseline()` helper. 7-day horizon, linear AR on level lags vs. persistence.
-- **`04. baseline_model.ipynb`** — baseline v2, self-contained: it does **not** import
-  `modeling.config` and does **not** log to MLflow, redefining `HORIZON`, `TEST_YEARS`,
-  `LOW_WATER_CM = 78`, `REGIME_BINS` and `VAL_YEARS` locally. Changing `modeling/config.py`
-  therefore moves 03 and leaves 04 where it was. This is the notebook with the real result.
-
-**The result that shapes any further modelling** (notebook 04, section 10): at a 7-day horizon
-*no* model beats persistence at low water — persistence has the lowest MAE in every regime below
-150 cm. OLS pulls low values toward the mean, over-predicting water by ~45 cm, which is the
-dangerous direction for load planning. Adding weather features halves that damage; `log10` target
-and gradient boosting do not fix it. Aggregate MAE hides all of this, so **every model must be
-reported with a low-water column and a per-regime bias table**, and the alarm decision (recall of
-"below threshold in N days") scored directly — a false negative is the expensive error.
+Leakage rule: any split keeps the embargo — the last training target lands before the next period's
+first origin. Choose models/settings on validation (or yearly validation folds), look at test once.
 
 ## Commands
 
-Everything runs through `uv`; there is no pip/conda/pyenv step. `uv run` re-syncs the env first,
-so prefer it over activating `.venv`.
+Everything runs through `uv` (no pip/conda). There is **no Makefile** (removed; `make` isn't installed
+on the user's Windows machine).
 
 ```bash
-make setup      # uv sync --all-groups   (runtime + dev; downloads Python >=3.11 if needed)
-make data       # uv run python -m modeling.data_pipeline   -> rebuilds data/processed/
-make lab        # uv run jupyter lab
-make mlflow     # uv run mlflow ui       -> http://127.0.0.1:5000
-make test       # uv run pytest
-make format     # uv run black .
-make train      # COFFEE TEMPLATE, not this project
-make predict    # COFFEE TEMPLATE, not this project
+uv sync --all-groups                          # install runtime + dev
+uv run python -m modeling.hydro_pipeline      # rebuild data/processed/kaub_hydro_weather_daily.csv
+uv run python -m modeling.data_pipeline --offline   # rebuild Kaub-only files from the weather cache
+uv run streamlit run modeling/App.py          # the app, http://localhost:8501
+uv run python -m pytest                       # 22 tests
+uv run python -m pytest tests/test_live_pipeline.py::test_live_features_equal_training_features
+uv run python -m jupyterlab                   # notebooks — run them from notebooks/
+uv run python -m nbconvert --to notebook --execute --inplace notebooks/<nb>.ipynb
+uv run black .
 ```
 
-Single test: `uv run pytest tests/test_data_pipeline.py::test_name`. `testbook` is installed but
-no notebook tests exist yet. `pythonpath = ["."]` in `pyproject.toml` is what lets pytest import
-`modeling` (`tool.uv package = false`, so the project is not installed).
+**Windows: always use `python -m`.** The uv launchers in `.venv/Scripts/*.exe` fail with
+*"uv trampoline failed to canonicalize script path"* (likely the space in `C:\Users\Prithvi Hegde`),
+so `uv run pytest`, `uv run jupyter …`, `uv run uvicorn …` break; `uv run python -m <module>` works.
+Shell output on this machine is cp1252 — set `PYTHONIOENCODING=utf-8` when printing notebook text
+with emoji/arrows.
 
-Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>` — never `pip
-install`, it would desync `uv.lock`. CI should use `uv sync --frozen`. See `UV_SETUP.md`.
+Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>` — never `pip install`.
+`mlflow`, `tabicl`, `parsenvy` and `statsmodels` are still declared but unused by current code
+(MLflow config `modeling/config.py` was removed); confirm with the user before removing them.
 
-## `modeling/config.py`
+## Notebooks
 
-More than MLflow config — it is the shared modelling contract for notebook 03:
+Run from `notebooks/` (they use `../data/...` and `sys.path.append("..")`). Outputs are committed.
 
-- `TRACKING_URI` resolves from the contents of a local `.mlflow_uri` file, then the `MLFLOW_URI`
-  env var, then empty. Currently `sqlite:///mlflow.db`, i.e. a local file, not a server.
-- A **relative** `sqlite:///` URI is rewritten to an absolute path under the repo root. This is
-  deliberate: without it, code run from `notebooks/` logs to a second database. `notebooks/mlflow.db`
-  is exactly that — a stray store with 5 orphaned runs from before the fix. The real store is
-  `./mlflow.db` (11 runs). Both are gitignored, along with `.mlflow_uri`; never commit them.
-- `EXPERIMENT_NAME = "hydroload-baseline"`. With the sqlite backend `mlflow.set_experiment`
-  creates it on first use — no `mlflow experiments create` step needed.
-- `DATE_COL`, `LEVEL_COL`, `DATA_PATH`, `HORIZON = 7`, `TEST_YEARS = 3`, `LAGS`, and
-  `REGIME = {"lowwater_100": 100, "glw_78": 78, "critical_40": 40}`.
+| Notebook | Uses pipelines | Notes |
+|---|---|---|
+| `01_data` | no | data import; active `to_csv` overwrites `data/processed/` legacy files |
+| `02_eda` | no | daily EDA (30-day rain window r≈0.53) |
+| `03_baseline_model` | no | persistence vs linear AR; evaluates on **training data only** (test set built but unused) |
+| `04_eda_and_multivariate_pipeline` | yes | all models via `kaub_pipeline`; **saves the app's model** |
+| `05_Real_time_pipeline` | yes | live forecast via `live_pipeline`; needs internet |
+| `../archive/notebooks/04_…_main`, `…/05_Real_time_data` | no | originals, hand-written; 05 loads a model file that no longer exists |
 
-`make mlflow` picks up `./mlflow.db` only because MLflow 3.x defaults `--backend-store-uri` to
-`sqlite:///mlflow.db` relative to the **working directory** — run it from the repo root.
+`notebooks/00. data_import.ipynb` is the user's personal copy and is git-ignored — leave it alone.
 
-Models are saved with `mlflow.sklearn.save_model` to a local path, not logged as MLflow artifacts;
-artifact logging would need an S3/AWS backend that is not set up here.
+## Git workflow
 
-## Conventions that bite
-
-- **`.gitignore` does NOT exclude data.** The `data/*.csv` line is commented out, so every CSV
-  under `data/` is tracked — ~100 MB is already committed (58 MB of raw gauge files plus 35 MB of
-  processed ones). Re-running `make data` therefore shows up as a large diff. `models/*`, `mlruns`,
-  `.mlflow_uri` and `mlflow.db` *are* ignored.
-- **Notebook outputs are committed too** — the `01.`–`04.` files are 0.6–1.5 MB each, mostly
-  rendered plots. nbdime is in the dev group: run `nbdime config-git --enable` once, then
-  `nbdime mergetool` when a `.ipynb` conflicts.
-- Any leakage-sensitive split must keep the embargo the notebooks establish: the last training
-  target lands on or before the split date, the first test row is the day after, and validation is
-  carved off the end of train the same way. Both 03 and 04 assert this.
-- Feature engineering in `modeling/feature_engineering.py` is a chain of pure
-  `DataFrame -> DataFrame` transforms applied identically to train and test (coffee code, but the
-  shape is worth keeping so a future `predict.py` can reuse it on raw input).
-
-## GitHub automation
-
-`.github/workflows/` contains four workflows that move issues and PRs across the neuefische org
-project board (project 7) via the GraphQL API. They require org-level secrets and do no build,
-test, or lint work — they will not validate a PR.
+Work on branch **`prithvi`**, push it, then bring it to `main` (fast-forward
+`git push origin prithvi:main` when `main` has nothing new, or a PR). The user also edits on the
+GitHub website (README, merges), so `git fetch` and pull before pushing; never force-push `main`.
+Commit or push only when the user asks; the user often prefers to run git commands themselves —
+give exact commands. `.github/workflows/` (neuefische project-board automation that needs org
+secrets) is git-ignored and kept only locally; tracking moved to Airtable.

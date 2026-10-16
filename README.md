@@ -1,4 +1,7 @@
-# 🚢 HydroLoad AI - An AI Solution to the supply chain management
+# 🚢 HydroLoad AI
+
+*An AI solution for supply chain management on the Rhine*
+
 ## Rhine water-level forecasting using ML algorithm and cargo planning
 
 **A decision-support prototype that predicts the water level at Kaub seven days ahead and translates the forecast into estimated vessel cargo capacity.**
@@ -30,7 +33,6 @@ Developed by **Team Rhine-Riders** as a Data Science and AI capstone project at 
 - [Installation and setup](#installation-and-setup)
 - [Running the application](#running-the-application)
 - [Reproducibility](#reproducibility)
-- [Troubleshooting](#troubleshooting)
 - [Limitations](#limitations)
 - [Future development](#future-development)
 - [Team and acknowledgements](#team-and-acknowledgements)
@@ -257,7 +259,7 @@ Date labels above refer to forecast origins. The target date is seven days later
 | MAE | Mean absolute error | Average absolute difference between predicted and observed levels |
 | RMSE | Root mean squared error | Gives greater weight to large errors |
 | R² | Coefficient of determination | Compares squared error with a constant test-period mean reference |
-| Bias | Mean predicted minus observed value | Positive indicates overprediction; negative indicates underprediction |
+| Bias | Mean predicted minus observed value | Positive indicates over prediction; negative indicates underprediction |
 | MAE skill | Percentage reduction in MAE relative to persistence | Positive indicates improvement over the baseline |
 
 MAE, RMSE, and bias are expressed in centimetres for this project.
@@ -269,13 +271,8 @@ The following values summarize the reported project experiments. Small differenc
 | Model | Test MAE | Test RMSE | Test R² |
 |---|---:|---:|---:|
 | Persistence baseline | Approximately 50.8 cm | Approximately 72.5 cm | Approximately 0.583 |
-| Selected XGBoost model | Approximately 43.6–48.0 cm | Approximately 56.23 cm | Approximately 0.673 |
+| Selected XGBoost model | Approximately 43.6 | Approximately 56.23 cm | Approximately 0.673 |
 
-Using the reported MAE values of 50.816 cm and 47.552 cm:
-
-**MAE = (50.816 − 47.552) / 50.816 × 100 ≈ 6.4%**
-
-This represents a modest improvement over persistence. It does not establish that every forecast is better or that the estimates are sufficiently accurate for operational loading decisions.
 
 ### Interpreting a 43.6 cm MAE
 
@@ -464,21 +461,61 @@ Not every experimentation package is necessarily required to run the final app. 
 
 ## Repository organization
 
-The following is a **Project components**. Listing of the current repository.
+```text
+Rhine-cargo-advisor/
+├── README.md                 Project documentation (this file)
+├── pyproject.toml, uv.lock   Dependencies, managed with uv
+├── data/
+│   ├── raw/                  15-minute gauge records: Kaub, Bingen, Kaub discharge
+│   └── processed/            Daily and hourly tables built from the raw data
+├── modeling/                 Pipelines, cargo logic and the Streamlit app
+├── models/                   Trained model used by the app
+├── notebooks/                Analysis and modelling, numbered in reading order
+├── docs/                     Pipeline documentation and final presentation
+├── images/                   App banner and project images
+├── tests/                    Automated tests for the pipelines
+└── archive/                  Unused files and earlier notebook versions, kept for reference
+```
+
+### Application and pipelines (`modeling/`)
 
 | Path | Purpose |
 |---|---|
-| README.md | Project documentation |
-| pyproject.toml | Project dependencies, if using uv |
-| uv.lock | Locked dependencies, if maintained |
-| data/processed/kaub_hydro_weather_daily.csv | Prepared daily dataset |
-| notebooks/ | Exploratory analysis, modeling, and evaluation |
-| modeling/App.py | Streamlit entry point |
-| modeling/realtime_pipeline.py | Live pipeline,  colocated with App.py |
-| modeling/cargo_calculation.py | Cargo logic,  colocated with App.py |
-| models/water_level_model.joblib | Exported model and metadata |
-| selected_features_daily.json | Feature list, where used |
-| images/ | App banners and project images |
+| `modeling/App.py` | Streamlit app: historical and live forecasts, cargo planning |
+| `modeling/data_pipeline.py` | Reads the raw Kaub record and weather, converts both to UTC and joins them |
+| `modeling/hydro_pipeline.py` | Builds the daily table (Kaub, Bingen, discharge, weather) and all model features |
+| `modeling/kaub_pipeline.py` | Trains, evaluates, saves and loads the forecasting models |
+| `modeling/realtime_pipeline.py` | Fetches live water levels (Pegelonline) and weather (Open-Meteo) |
+| `modeling/live_pipeline.py` | Turns live data into model inputs with the same feature code as training |
+| `modeling/cargo_calculation.py` | Converts a forecast water level into draft, vessel cargo and truckloads |
+
+### Data and model
+
+| Path | Purpose |
+|---|---|
+| `data/raw/water_level_15min_kaub.csv` | Kaub water level, 15-minute readings |
+| `data/raw/bingen_water_level15_min.csv` | Bingen (upstream) water level, 15-minute readings |
+| `data/raw/kaub_water_discharge.csv` | Kaub discharge, 15-minute readings |
+| `data/processed/kaub_hydro_weather_daily.csv` | Prepared daily dataset used by the app and the pipelines |
+| `models/kaub_xgboost_04.joblib` | Trained XGBoost model with its feature list and forecast horizon |
+
+### Notebooks
+
+| Path | Purpose |
+|---|---|
+| `notebooks/01_data.ipynb` | Data import and first exploration |
+| `notebooks/02_eda.ipynb` | Exploratory data analysis |
+| `notebooks/03_baseline_model.ipynb` | Persistence and linear baseline models |
+| `notebooks/04_eda_and_multivariate_pipeline.ipynb` | Multivariate models built with the pipelines; saves the app's model |
+| `notebooks/05_Real_time_pipeline.ipynb` | Live forecast with the real-time pipeline |
+
+### Documentation and tests
+
+| Path | Purpose |
+|---|---|
+| `docs/pipelines.md` | How the data, training and live pipelines work |
+| `docs/Final_Presentation_HydroLoadAI_final.pdf` | Final project presentation |
+| `tests/` | Tests for time zones, features, data splits and live inputs |
 
 
 ## Installation and setup
@@ -612,24 +649,6 @@ To reproduce the analysis:
 - Requested cargo is nonnegative and any truck-capacity divisor is positive.
 - Model results can be traced to a particular data snapshot and model artifact.
 
-## Troubleshooting
-
-| Problem | Checks and corrective action |
-|---|---|
-| No such command 'App.py' | Include run: uv run streamlit run modeling/App.py |
-| ModuleNotFoundError for a package | Install or synchronize dependencies in the environment used to launch the app |
-| ModuleNotFoundError for a project module | Check the file location, package structure, import statement, and working directory |
-| Model artifact not found | Confirm the artifact exists and the path is resolved relative to the intended project root |
-| Dataset not found | Check the processed-data location and filename |
-| KeyError for features or feature_names | Inspect the saved artifact schema and make export and loading code use the same key |
-| Feature-name mismatch | Reproduce the exported model's exact feature names and order |
-| NameError: st is not defined | Import streamlit as st in the module containing Streamlit calls |
-| NameError for a pipeline function | Define or import that function before invoking the pipeline |
-| Duplicate dates | Inspect aggregation and merge logic; ensure one intended daily record per date |
-| DatetimeIndex required | Parse dates and set a sorted datetime index before time-based operations |
-| Live request fails | Check source availability, request parameters, connectivity, and error handling |
-| Not enough live history | Retrieve enough observations for all lag and rolling-window features |
-| Unexpected cargo estimate | Check centimetre-to-metre conversion, depth reference, vessel drafts, and clearance |
 
 ## Limitations
 
@@ -698,6 +717,7 @@ The project brings together statistical modeling, machine learning, environmenta
 
 Python 3.14
 Data used from Pegelonline and Meteo
+MIT license
 
 ---
 
