@@ -139,3 +139,6 @@ mlflow.db
 00. data_import.ipynb
 # macOS system files
 .DS_Store
+
+# GitHub project-board workflows (need neuefische secrets; kept locally only)
+.github/workflows/
