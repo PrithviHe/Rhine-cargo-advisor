@@ -85,7 +85,7 @@ HydroLoad AI aims to make the relationship between expected river conditions and
 | Component | Purpose |
 |---|---|
 | Historical data analysis | Explore long-term water-level and weather patterns |
-| Seven-day forecast | Estimate the Kaub water level for a target date seven days after the forecast origin |
+| Seven-day forecast | Forecast the water level seven days ahead |
 | Model comparison | Compare regression and tree-based approaches with persistence |
 | Live inference workflow | Prepare recent observations and generate a forecast using a saved model |
 | Cargo calculator | Estimate loading capacity from vessel and depth assumptions |
