@@ -487,7 +487,6 @@ Rhine-cargo-advisor/
 |---|---|
 | `modeling/App.py` | Streamlit app: historical and live forecasts, cargo planning |
 | `modeling/data_pipeline.py` | Reads the raw Kaub record and weather, converts both to UTC and joins them |
-| `modeling/hydro_pipeline.py` | Builds the daily table (Kaub, Bingen, discharge, weather) and all model features |
 | `modeling/kaub_pipeline.py` | Trains, evaluates, saves and loads the forecasting models |
 | `modeling/realtime_pipeline.py` | Fetches live water levels (Pegelonline) and weather (Open-Meteo) |
 | `modeling/live_pipeline.py` | Turns live data into model inputs with the same feature code as training |
@@ -513,14 +512,12 @@ Rhine-cargo-advisor/
 | `notebooks/04_eda_and_multivariate_pipeline.ipynb` | Multivariate models built with the pipelines; saves the app's model |
 | `notebooks/05_Real_time_pipeline.ipynb` | Live forecast with the real-time pipeline |
 
-### Documentation and tests
+### Documentation 
 
 | Path | Purpose |
 |---|---|
 | `docs/pipelines.md` | How the data, training and live pipelines work |
 | `docs/Final_Presentation_HydroLoadAI_final.pdf` | Final project presentation |
-| `tests/` | Tests for time zones, features, data splits and live inputs |
-
 
 ## Installation and setup
 
