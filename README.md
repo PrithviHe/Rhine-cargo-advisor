@@ -155,8 +155,6 @@ The historical dataset described in the project covers **1 January 2000 to 1 Sep
 | discharge_mean | Mean daily discharge |
 | hours_available | Measurement coverage indicator |
 
-Confirm weather and discharge units in the source export and ingestion configuration. In particular, rainfall and snowfall fields may use different units.
-
 ### Gauge level versus water depth
 
 **Gauge level is not the same as navigable water depth.** A gauge value is measured relative to a station-specific reference. Estimating depth requires a separate reference relationship.
@@ -386,12 +384,6 @@ equivalent_truckloads = ceil(remaining_t / truck_capacity_t)
 ```
 
 This is a capacity comparison only. It does not estimate road availability, cost, emissions, or transport feasibility.
-
-### Forecast uncertainty
-
-A conservative scenario could use a calibrated lower prediction bound instead of a point forecast. Such a bound needs a defined coverage level and validation on unseen observations.
-
-Do not describe the current application as providing a validated 80% lower bound unless interval estimation and coverage checks are implemented. Subtracting MAE from the point forecast is not sufficient to create a calibrated interval.
 
 ## Live data pipeline
 
