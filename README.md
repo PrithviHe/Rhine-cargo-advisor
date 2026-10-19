@@ -1,7 +1,7 @@
 # 🚢 HydroLoad AI - <small><i>An AI Solution for Supply Chain management</i></small>
 
 ![The Rhine at Kaub](images/4_kaub.jpg)
-<sub>📷 Photo: Prithvi - taken near Kaub in the summer 2025.</sub>
+<sub>📷 Photo credit: Prithvi (taken near Kaub in summer 2025).</sub>
 
 ## Rhine water-level forecasting using ML algorithm and cargo planning
 
