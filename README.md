@@ -1,7 +1,7 @@
 # 🚢 HydroLoad AI - <small><i>An AI Solution for Supply Chain management</i></small>
 
 ![The Rhine at Kaub](images/4_kaub.jpg)
-<sub>📷 Photo: Prithvi - taken near Kaub in the summer 2025.</sub>
+<sub>📷 Photo credit: Prithvi (taken near Kaub in summer 2025).</sub>
 
 ## Rhine water-level forecasting using ML algorithm and cargo planning
 
@@ -85,7 +85,7 @@ HydroLoad AI aims to make the relationship between expected river conditions and
 | Component | Purpose |
 |---|---|
 | Historical data analysis | Explore long-term water-level and weather patterns |
-| Seven-day forecast | Estimate the Kaub water level for a target date seven days after the forecast origin |
+| Seven-day forecast | Forecast the water level seven days ahead |
 | Model comparison | Compare regression and tree-based approaches with persistence |
 | Live inference workflow | Prepare recent observations and generate a forecast using a saved model |
 | Cargo calculator | Estimate loading capacity from vessel and depth assumptions |
@@ -154,8 +154,6 @@ The historical dataset described in the project covers **1 January 2000 to 1 Sep
 | bingen_level_mean | Mean daily Bingen gauge level |
 | discharge_mean | Mean daily discharge |
 | hours_available | Measurement coverage indicator |
-
-Confirm weather and discharge units in the source export and ingestion configuration. In particular, rainfall and snowfall fields may use different units.
 
 ### Gauge level versus water depth
 
@@ -387,12 +385,6 @@ equivalent_truckloads = ceil(remaining_t / truck_capacity_t)
 
 This is a capacity comparison only. It does not estimate road availability, cost, emissions, or transport feasibility.
 
-### Forecast uncertainty
-
-A conservative scenario could use a calibrated lower prediction bound instead of a point forecast. Such a bound needs a defined coverage level and validation on unseen observations.
-
-Do not describe the current application as providing a validated 80% lower bound unless interval estimation and coverage checks are implemented. Subtracting MAE from the point forecast is not sufficient to create a calibrated interval.
-
 ## Live data pipeline
 
 The live workflow retrieves recent observations, prepares daily data, and generates the input row for the saved model.
@@ -487,7 +479,6 @@ Rhine-cargo-advisor/
 |---|---|
 | `modeling/App.py` | Streamlit app: historical and live forecasts, cargo planning |
 | `modeling/data_pipeline.py` | Reads the raw Kaub record and weather, converts both to UTC and joins them |
-| `modeling/hydro_pipeline.py` | Builds the daily table (Kaub, Bingen, discharge, weather) and all model features |
 | `modeling/kaub_pipeline.py` | Trains, evaluates, saves and loads the forecasting models |
 | `modeling/realtime_pipeline.py` | Fetches live water levels (Pegelonline) and weather (Open-Meteo) |
 | `modeling/live_pipeline.py` | Turns live data into model inputs with the same feature code as training |
@@ -513,14 +504,12 @@ Rhine-cargo-advisor/
 | `notebooks/04_eda_and_multivariate_pipeline.ipynb` | Multivariate models built with the pipelines; saves the app's model |
 | `notebooks/05_Real_time_pipeline.ipynb` | Live forecast with the real-time pipeline |
 
-### Documentation and tests
+### Documentation 
 
 | Path | Purpose |
 |---|---|
 | `docs/pipelines.md` | How the data, training and live pipelines work |
 | `docs/Final_Presentation_HydroLoadAI_final.pdf` | Final project presentation |
-| `tests/` | Tests for time zones, features, data splits and live inputs |
-
 
 ## Installation and setup
 
